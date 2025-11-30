@@ -1,0 +1,15 @@
+# Visual Studio файлы
+.vs/
+*.user
+*.suo
+
+# Компиляционные файлы .NET
+bin/
+obj/
+*.xml
+
+# Файлы миграций
+Migrations/
+
+# HTTP-запросы (например, для тестов API в Visual Studio или Rider)
+*.http
