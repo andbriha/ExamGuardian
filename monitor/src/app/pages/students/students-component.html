@@ -1,0 +1,47 @@
+<p>students-component works!</p>
+<div class="students-container card">
+  <div class="table-header">
+    <h3>👥 База студентів</h3>
+    <div class="search-box">
+      <input type="text" [(ngModel)]="searchQuery" placeholder="Пошук за ПІБ або групою...">
+      <span class="search-icon">🔍</span>
+    </div>
+  </div>
+
+  <table class="students-table">
+    <thead>
+      <tr>
+        <th>Студент</th>
+        <th>Група</th>
+        <th>Логін</th>
+        <th>Статус</th>
+        <th>Останній іспит</th>
+        <th>Дії</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let student of filteredStudents()">
+        <td>
+          <div class="student-info">
+            <div class="mini-avatar">{{ student.name.charAt(0) }}</div>
+            <span>{{ student.name }}</span>
+          </div>
+        </td>
+        <td>{{ student.group }}</td>
+        <td><code>{{ student.login }}</code></td>
+        <td>
+          <span class="status-badge" [ngClass]="student.status">
+            {{ student.status === 'online' ? 'В мережі' : 'Офлайн' }}
+          </span>
+        </td>
+        <td>{{ student.lastExam || 'Немає даних' }}</td>
+        <td>
+          <div class="actions-btns">
+            <button class="btn-icon" title="Редагувати">✏️</button>
+            <button class="btn-icon delete" title="Видалити">🗑️</button>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
