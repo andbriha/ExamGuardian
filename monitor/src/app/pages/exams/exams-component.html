@@ -1,0 +1,36 @@
+<div class="exam-settings-container card">
+  <h3>📅 Налаштування нового іспиту</h3>
+
+  <div class="settings-grid">
+    <div class="input-section">
+      <div class="input-group">
+        <label>Назва дисципліни</label>
+        <input type="text" [(ngModel)]="exam.title" placeholder="Напр: Об'єктно-орієнтоване програмування">
+      </div>
+
+      <div class="input-row">
+        <div class="input-group">
+          <label>Дата та час початку</label>
+          <input type="datetime-local" [(ngModel)]="exam.startTime">
+        </div>
+        <div class="input-group">
+          <label>Тривалість (хвилини)</label>
+          <input type="number" [(ngModel)]="exam.duration" placeholder="60">
+        </div>
+      </div>
+    </div>
+
+    <div class="upload-section">
+      <label>Файл іспиту (JSON/XML)</label>
+      <div class="drop-zone" (click)="testFile.click()">
+        <input type="file" #testFile (change)="onTestUpload($event)" hidden>
+        <span>📄 {{ fileName || 'Оберіть файл іспиту...' }}</span>
+      </div>
+      <small>Формат: Питання, варіанти відповідей, правильний індекс.</small>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" (click)="createExam()">🚀 Запустити іспит в систему</button>
+  </div>
+</div>

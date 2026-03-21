@@ -1,0 +1,142 @@
+.exam-settings-container {
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+  padding: 30px;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+}
+
+h3 {
+  margin-top: 0;
+  margin-bottom: 25px;
+  color: #333;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Сітка налаштувань */
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.input-group {
+  margin-bottom: 20px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="datetime-local"] {
+  width: 100%;
+  padding: 12px;
+  border: 1.5px solid #eef0f2;
+  border-radius: 10px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  background: #fbfcfd;
+}
+
+input:focus {
+  border-color: #008080;
+  background: white;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 128, 128, 0.1);
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 15px;
+}
+
+/* Зона завантаження файлу */
+.upload-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.drop-zone {
+  flex-grow: 1;
+  border: 2px dashed #cbd5e0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  cursor: pointer;
+  background: #f8fafc;
+  transition: all 0.3s ease;
+  text-align: center;
+  min-height: 120px;
+}
+
+.drop-zone:hover {
+  border-color: #008080;
+  background: #f0f7f7;
+  color: #008080;
+}
+
+.drop-zone span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #4a5568;
+}
+
+small {
+  display: block;
+  margin-top: 10px;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Кнопка та дії */
+.actions {
+  border-top: 1px solid #edf2f7;
+  padding-top: 25px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-primary {
+  background: #008080;
+  color: white;
+  border: none;
+  padding: 14px 28px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 128, 128, 0.2);
+}
+
+.btn-primary:hover {
+  background: #006666;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 128, 128, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Адаптивність */
+@media (max-width: 768px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}

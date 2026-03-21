@@ -4,7 +4,7 @@ project(Client VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick)
+find_package(Qt6 REQUIRED COMPONENTS Quick Concurrent Multimedia)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -14,24 +14,38 @@ qt_add_executable(appClient
 
 qt_add_qml_module(appClient
     URI Client
+    VERSION 0.1
     QML_FILES
         Main.qml
+        LoginScreen.qml
+        ProcessCheckScreen.qml
+        MediaCheckScreen.qml
+    SOURCES
+        proctoring_module.h
+        proctoring_module.cpp
+        input_blocker.h
+        input_blocker.cpp
+        process_scanner.h
+        process_scanner.cpp
+        media_validator.h
+        media_validator.cpp
 )
 
-# Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
-# If you are developing for iOS or macOS you should consider setting an
-# explicit, fixed bundle identifier manually though.
 set_target_properties(appClient PROPERTIES
-#    MACOSX_BUNDLE_GUI_IDENTIFIER com.example.appClient
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE
 )
 
+
 target_link_libraries(appClient
-    PRIVATE Qt6::Quick
+    PRIVATE Qt6::Quick Qt6::Concurrent Qt6::Multimedia
 )
+
+if(WIN32)
+    target_link_libraries(appClient PRIVATE user32 psapi)
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS appClient

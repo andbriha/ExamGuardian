@@ -1,0 +1,75 @@
+<div class="admin-container">
+  <div class="form-section card">
+    <h3>🆕 Створення акаунту студента</h3>
+    <div class="input-group">
+      <label>Повне ім'я (ПІБ)</label>
+      <input type="text" [(ngModel)]="studentData.name" placeholder="Напр. Іванов Іван Іванович">
+    </div>
+
+    <div class="input-row">
+      <div class="input-group">
+        <label>Логін (Згенеровано)</label>
+        <input type="text" [value]="generatedLogin" readonly class="readonly-input">
+      </div>
+      <div class="input-group">
+        <label>Пароль</label>
+        <div class="password-wrapper">
+          <input type="text" [(ngModel)]="studentData.password" readonly>
+          <button (click)="generateCredentials()" title="Оновити">🔄</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <label>Група</label>
+      <input type="text" [(ngModel)]="studentData.group" placeholder="Напр. КН-2024">
+    </div>
+
+    <div class="input-group">
+      <label>Фото для AI-моделі</label>
+      <div class="upload-zone" (click)="fileInput.click()">
+        <input type="file" #fileInput (change)="onFileSelected($event)" hidden accept="image/*">
+        <span *ngIf="!previewImage">📁 Натисніть, щоб обрати фото</span>
+        <img *ngIf="previewImage" [src]="previewImage" class="mini-preview">
+      </div>
+    </div>
+
+    <button class="btn-primary" (click)="saveStudent()">💾 Зберегти та активувати акаунт</button>
+  </div>
+
+  <div class="preview-section">
+    <h3>🪪 Картка доступу</h3>
+    <div class="student-card" id="student-badge">
+      <div class="badge-header">
+        <span class="shield">🛡️</span> ExamGuardian
+      </div>
+      <div class="badge-body">
+        <div class="badge-photo">
+          <img [src]="previewImage || 'assets/default-avatar.png'" alt="Student">
+        </div>
+        <div class="badge-info">
+          <h4>{{ studentData.name || 'ПІБ Студента' }}</h4>
+          <p class="group-label">{{ studentData.group || 'Група не вказана' }}</p>
+          
+          <div class="credentials-box">
+            <div class="cred">
+              <small>Логін:</small>
+              <span>{{ generatedLogin }}</span>
+            </div>
+            <div class="cred">
+              <small>Пароль:</small>
+              <span>{{ studentData.password }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="badge-footer">
+        Використовуйте ці дані для входу в Qt Client
+      </div>
+    </div>
+    
+    <div class="ai-tips">
+      <p>💡 <strong>Порада для AI:</strong> Модель найкраще розпізнає обличчя, якщо фото зроблено анфас на світлому фоні.</p>
+    </div>
+  </div>
+</div>

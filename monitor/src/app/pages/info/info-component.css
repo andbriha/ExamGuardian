@@ -1,0 +1,125 @@
+.admin-container {
+  display: grid;
+  grid-template-columns: 1fr 400px;
+  gap: 30px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.card {
+  background: white;
+  padding: 25px;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+.input-group {
+  margin-bottom: 20px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 8px;
+}
+
+input[type="text"], textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1.5px solid #eef0f2;
+  border-radius: 10px;
+  transition: 0.3s;
+  background: #fbfcfd;
+}
+
+input:focus {
+  border-color: #008080;
+  outline: none;
+  background: white;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.password-wrapper {
+  display: flex;
+  gap: 5px;
+}
+
+.password-wrapper button {
+  background: #f0f7f7;
+  border: none;
+  padding: 0 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Стійлі картки-бейджа */
+.student-card {
+  background: linear-gradient(135deg, #008080 0%, #004d4d 100%);
+  color: white;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 15px 35px rgba(0,128,128,0.2);
+}
+
+.badge-header {
+  font-weight: bold;
+  letter-spacing: 1px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.badge-body {
+  display: flex;
+  gap: 20px;
+  background: rgba(255,255,255,0.1);
+  padding: 15px;
+  border-radius: 15px;
+  backdrop-filter: blur(5px);
+}
+
+.badge-photo img {
+  width: 100px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: white;
+}
+
+.credentials-box {
+  margin-top: 15px;
+  background: rgba(0,0,0,0.2);
+  padding: 10px;
+  border-radius: 8px;
+  font-family: monospace;
+}
+
+.cred small {
+  color: #80cbc4;
+  display: block;
+  font-size: 10px;
+}
+
+.btn-primary {
+  background: #008080;
+  color: white;
+  border: none;
+  width: 100%;
+  padding: 15px;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 5px 15px rgba(0,128,128,0.3);
+  transition: 0.3s;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  background: #006666;
+}
