@@ -1,0 +1,63 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.suo
+*.user
+*.user.*
+*.sln.docstates
+
+# Python & ML
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+Inference/venv/
+Inference/notebooks/venv/
+.pytest_cache/
+
+# .NET & ASP.NET Core
+bin/
+obj/
+*.userprefs
+Core/Core/ExamVideos/*
+!Core/Core/ExamVideos/.gitkeep
+
+# Node & Frontend (Angular, Astro)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+.angular/
+.astro/
+
+# C++ & Qt
+Client/build*/
+Client/Deploy/
+*.obj
+*.o
+*.pdb
+*.idb
+*.ilk
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# OS generated
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

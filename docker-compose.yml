@@ -1,0 +1,94 @@
+version: "3.9"
+
+services:
+  # 1. PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: proctoring_db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  # 2. C# Backend API
+  api:
+    build:
+      context: ./Core
+      dockerfile: Dockerfile
+    container_name: proctoring_api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      - Jwt__Key=${JWT__KEY}
+      - Jwt__Issuer=${JWT__ISSUER}
+      - Jwt__Audience=${JWT__AUDIENCE}
+      - Jwt__LifetimeMinutes=${JWT__LIFETIME_MINUTES:-1440}
+      - AiService__ApiKey=${AiService__ApiKey}
+      - INFERENCE_IMAGES_PATH=/app/InferenceImages
+    volumes:
+      - shared_images:/app/InferenceImages
+      - ./Core/Core/ExamVideos:/app/ExamVideos
+    networks:
+      - app_network
+    restart: unless-stopped
+    depends_on:
+      - db
+
+  # 3. Python AI Microservice
+  ai_service:
+    build:
+      context: ./Inference
+      dockerfile: Dockerfile
+    container_name: proctoring_ai
+    ports:
+      - "8000:8000"
+    environment:
+      - CORE_API_URL=http://api:8080/api/violations
+      - AI_API_KEY=${AiService__ApiKey}
+      - API_URL=http://api:8080/api 
+      - API_KEY=${AiService__ApiKey}
+      - JWT__KEY=${JWT__KEY}
+      - JWT_SECRET_KEY=${JWT__KEY}
+      - INFERENCE_IMAGES_PATH=/app/images
+    volumes:
+      - shared_images:/app/images
+      - deepface_cache:/root/.deepface
+    networks:
+      - app_network
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  # 4. Angular Monitor & Landing (Nginx)
+  nginx:
+    build:
+      context: ./monitor
+      dockerfile: Dockerfile
+      args:
+        # Pass the URL from .env to the sed command in Dockerfile
+        BACKEND_URL: ${BACKEND_URL}
+    container_name: proctoring_nginx
+    ports:
+      - "${NGINX_PORT}:80"
+    volumes:
+      - ./monitor/nginx.conf:/etc/nginx/conf.d/default.conf
+      # Map the static landing page folder
+      - ./Landing:/usr/share/nginx/html/landing 
+    networks:
+      - app_network
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  shared_images:
+  deepface_cache:
+
+networks:
+  app_network:
+    driver: bridge
