@@ -1,0 +1,13 @@
+fastapi
+pyjwt
+uvicorn[standard]
+python-multipart
+pydantic-settings
+httpx
+mediapipe
+deepface
+tf-keras
+opencv-python-headless
+numpy
+ultralytics
+webrtcvad
