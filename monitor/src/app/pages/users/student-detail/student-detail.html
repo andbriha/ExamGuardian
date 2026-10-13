@@ -1,0 +1,54 @@
+<div class="page-wrap" *ngIf="student">
+  <div class="top-nav">
+    <button class="btn-back" routerLink="/students">🡐 Назад до списку</button>
+  </div>
+
+  <div class="detail-grid">
+    <div class="info-side">
+      <div class="profile-header">
+        <div class="avatar-big">👤</div>
+        <div>
+          <h1>{{ student.fullName }}</h1>
+          <span class="badge">{{ student.role || 'Студент' }}</span>
+        </div>
+      </div>
+
+      <div class="creds-card">
+        <h3>Доступи до системи (Qt Client)</h3>
+        <div class="cred-item">
+          <label>Логін</label>
+          <div class="val">{{ student.login }}</div>
+        </div>
+        <div class="cred-item">
+          <label>ID студента</label>
+          <div class="val" style="font-size: 13px; font-family: monospace;">{{ student.id }}</div>
+        </div>
+      </div>
+
+      <div class="status-box active">
+        Статус акаунта: <strong>Активний</strong>
+      </div>
+
+      <button class="btn-danger" (click)="deleteStudent()">Видалити профіль</button>
+    </div>
+
+    <div class="photo-side">
+      <div class="photo-card">
+        <h3>AI Reference Photo</h3>
+        <div class="img-wrap">
+          <img [src]="photoUrl" alt="Reference Photo" (error)="$any($event.target).src = 'https://ui-avatars.com/api/?name=' + student.fullName + '&background=0D8ABC&color=fff&size=200'">
+        </div>
+        <p class="hint">Це еталонне фото використовується нейромережею для біометричної ідентифікації студента під час іспиту.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-wrap" *ngIf="isLoading" style="padding: 40px; text-align: center; color: #64748b;">
+  <p>⏳ Завантаження даних студента...</p>
+</div>
+
+<div class="page-wrap" *ngIf="!isLoading && errorMessage" style="padding: 40px; text-align: center; color: #ef4444;">
+  <p>{{ errorMessage }}</p>
+  <button class="btn-back" routerLink="/students" style="margin-top: 16px;">🡐 Повернутися до списку</button>
+</div>

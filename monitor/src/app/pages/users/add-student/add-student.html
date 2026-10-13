@@ -1,0 +1,88 @@
+<div class="page-wrap">
+  <div class="header">
+    <h2>Створення акаунта студента</h2>
+    <p>Введіть дані студента, оберіть академічну групу та згенеруйте облікові дані для тестування</p>
+  </div>
+
+  <div class="card p-24">
+    <!-- Full Name -->
+    <div class="input-group">
+      <label>ПІБ Студента <span class="req">*</span></label>
+      <input type="text" 
+             [(ngModel)]="newForm.name" 
+             (input)="onNameChange()"
+             placeholder="Коваленко Андрій Олександрович">
+      <span class="hint">Логін формується автоматично на основі імені (транслітерація)</span>
+    </div>
+
+    <!-- Group Selector & Quick Chips -->
+    <div class="input-group">
+      <label>Академічна група <span class="req">*</span></label>
+      <div class="group-chips">
+        @for (grp of availableGroups; track grp) {
+          <button type="button" 
+                  class="chip" 
+                  [class.active]="newForm.group === grp" 
+                  (click)="selectGroup(grp)">
+            {{ grp }}
+          </button>
+        }
+      </div>
+      <input type="text" 
+             [(ngModel)]="newForm.group" 
+             placeholder="Або введіть назву групи вручну (напр. КН-2024)"
+             style="margin-top: 8px;">
+    </div>
+
+    <!-- Credentials Generator Box -->
+    <div class="credentials-card">
+      <div class="cred-header">
+        <div class="ch-left">
+          <strong>🔐 Автоматично згенеровані облікові дані</strong>
+          <span>Видайте ці дані студенту для входу в десктопний клієнт Online Proctoring System</span>
+        </div>
+        <div class="ch-actions">
+          <button type="button" class="btn-regen" (click)="generateCredentials()" title="Згенерувати новий пароль та логін">
+            🔄 Перегенерувати
+          </button>
+          <button type="button" class="btn-copy" (click)="copyCredentials()" [class.copied]="copySuccess">
+            {{ copySuccess ? '✅ Скопійовано!' : '📋 Скопіювати' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="row-2" style="margin-top: 12px;">
+        <div class="input-group mb-0">
+          <label>Згенерований логін</label>
+          <input type="text" [(ngModel)]="newForm.login" class="code-font font-bold">
+        </div>
+        <div class="input-group mb-0">
+          <label>Безпечний пароль</label>
+          <input type="text" [(ngModel)]="newForm.pass" class="code-font font-bold">
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Reference Photo -->
+    <div class="input-group" style="margin-top: 20px;">
+      <label>AI-еталонне фото обличчя</label>
+      <div class="drop-zone" (click)="fileIn.click()">
+        <input type="file" #fileIn hidden accept="image/*" (change)="onFile($event)">
+        @if (previewUrl) {
+          <img [src]="previewUrl" class="preview" alt="AI Reference">
+          <span class="preview-overlay">Клікніть для заміни</span>
+        } @else {
+          <div class="dz-text">
+            <span class="icon">📸</span>
+            <strong>Завантажити фото студента</strong>
+            <span class="sub">Формат JPEG/PNG. Використовується для верифікації FaceID</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <button class="btn-primary w-100" (click)="save()" [disabled]="isSaving" style="margin-top: 24px;">
+      {{ isSaving ? '⏳ Збереження...' : '💾 Зберегти та активувати студента' }}
+    </button>
+  </div>
+</div>

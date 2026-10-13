@@ -1,0 +1,58 @@
+<div class="auth-container">
+  <div class="card auth-card">
+    <header class="auth-header">
+      <h1>Online Proctoring System Monitor</h1>
+      <p>Вхід до панелі адміністрування та моніторингу</p>
+    </header>
+
+    <form (ngSubmit)="onLoginSubmit()">
+      <div class="form-group" style="margin-bottom: 1rem;">
+        <label for="login" style="display: block; font-weight: 500; margin-bottom: 0.25rem;">Логін</label>
+        <input
+          id="login"
+          type="text"
+          [(ngModel)]="login"
+          name="login"
+          required
+          placeholder="admin"
+          style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;"
+        />
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.25rem;">
+        <label for="password" style="display: block; font-weight: 500; margin-bottom: 0.25rem;">Пароль</label>
+        <input
+          id="password"
+          type="password"
+          [(ngModel)]="password"
+          name="password"
+          required
+          placeholder="••••••••"
+          style="width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;"
+        />
+      </div>
+
+      @if (errorMessage) {
+        <div class="error-message" style="margin-bottom: 1rem; padding: 0.75rem; background-color: #fee2e2; color: #b91c1c; border-radius: 6px; font-size: 0.9rem;">
+          <p style="margin: 0;">{{ errorMessage }}</p>
+        </div>
+      }
+
+      <button
+        type="submit"
+        [disabled]="isLoading || !login || !password"
+        style="width: 100%; padding: 0.75rem; background-color: #2563eb; color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer;"
+      >
+        {{ isLoading ? 'Вхід...' : 'Увійти' }}
+      </button>
+    </form>
+
+    <div style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid #e2e8f0; text-align: center;">
+      <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 0.5rem;">Ви студент і складаєте іспит?</p>
+      <a href="/landing/" style="display: inline-flex; align-items: center; gap: 0.35rem; color: #2563eb; font-weight: 600; font-size: 0.9rem; text-decoration: none;">
+        <span>📥 Завантажити клієнт Online Proctoring System (.exe)</span>
+        <span>&rarr;</span>
+      </a>
+    </div>
+  </div>
+</div>

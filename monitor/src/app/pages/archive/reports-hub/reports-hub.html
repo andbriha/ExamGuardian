@@ -1,0 +1,53 @@
+<div class="hub-wrap">
+  <div class="header">
+    <h2>📊 Архів та Звіти</h2>
+    <p>Результати сесій тестування, аналіз проходження та генерація офіційних протоколів</p>
+  </div>
+
+  <div *ngIf="isLoading" style="text-align: center; padding: 40px; color: #64748b;">
+    <p>⏳ Завантаження архіву звітів...</p>
+  </div>
+
+  <div *ngIf="!isLoading && errorMessage" style="text-align: center; padding: 40px; color: #ef4444;">
+    <p>{{ errorMessage }}</p>
+  </div>
+
+  <div class="grid" *ngIf="!isLoading && !errorMessage">
+    @for (exam of completedExams; track exam.id) {
+      <div class="report-card" [class.card-aborted]="exam.status === 'aborted'">
+        <div class="card-top">
+          <span class="badge-status" [class]="'badge-' + exam.status">
+            {{ exam.statusText }}
+          </span>
+          <span class="date">{{ exam.date }}</span>
+        </div>
+        
+        <h3 class="title">{{ exam.title }}</h3>
+        <p class="group"><strong>{{ exam.groupName }}</strong></p>
+        
+        <div class="metrics">
+          <div class="metric">
+            <span class="m-label">Підсумковий бал</span>
+            <span class="m-val" [class.text-muted]="exam.status === 'aborted'">
+              {{ exam.status === 'aborted' ? '— / 100' : (exam.avgScore + '/100') }}
+            </span>
+          </div>
+          <div class="metric">
+            <span class="m-label">Порушень прокторингу</span>
+            <span class="m-val" [class.text-red]="exam.violationsCount > 0">{{ exam.violationsCount }}</span>
+          </div>
+        </div>
+        
+        <button class="btn-pdf" (click)="downloadReport(exam.id)">
+          📄 Сформувати / Друк звіту
+        </button>
+      </div>
+    }
+
+    @if (completedExams.length === 0) {
+      <div style="grid-column: 1 / -1; padding: 48px; text-align: center; color: #94a3b8; background: #fff; border-radius: 12px; border: 1px dashed #cbd5e1;">
+        <span>📂 Звітів ще немає. Складіть іспит у клієнті для формування протоколів.</span>
+      </div>
+    }
+  </div>
+</div>

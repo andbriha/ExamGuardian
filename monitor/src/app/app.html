@@ -2,24 +2,18 @@
   <aside class="sidebar">
     <div class="logo">
       <span class="logo-icon">🛡️</span>
-      <h1 class="logo-text">Exam<span>Guardian</span></h1>
+      <h1 class="logo-text">Online<span>Proctoring</span></h1>
     </div>
 
     <nav class="nav-menu">
-      <div class="menu-label">Головна</div>
-      <a routerLink="/info" routerLinkActive="active" class="nav-item">
-        <i class="icon">ℹ️</i>
-        <span>Інфо & Допомога</span>
-      </a>
-
       <div class="menu-label">Користувачі</div>
       <a routerLink="/students" routerLinkActive="active" class="nav-item">
         <i class="icon">👥</i>
         <span>База студентів</span>
       </a>
-      <a routerLink="/upload" routerLinkActive="active" class="nav-item">
-        <i class="icon">📸</i>
-        <span>Завантажити фото</span>
+      <a routerLink="/add-student" routerLinkActive="active" class="nav-item">
+        <i class="icon">➕</i>
+        <span>Додати студента</span>
       </a>
 
       <div class="menu-label">Прокторинг</div>
@@ -29,35 +23,54 @@
       </a>
       <a routerLink="/monitoring" routerLinkActive="active" class="nav-item">
         <i class="icon">🖥️</i>
-        <span>Моніторинг</span>
+        <span>Live Моніторинг</span>
       </a>
       <a routerLink="/reports" routerLinkActive="active" class="nav-item">
         <i class="icon">📊</i>
-        <span>Звіти</span>
+        <span>Архів та Звіти</span>
+      </a>
+
+      <div class="menu-label">Клієнт тестування</div>
+      <a href="/landing/" target="_blank" class="nav-item" style="color: #1a56db; font-weight: 500;">
+        <i class="icon">📥</i>
+        <span>Завантажити клієнт (.exe)</span>
       </a>
     </nav>
 
     <div class="user-profile">
-      <div class="avatar">EP</div>
-      <div class="user-info">
-        <p class="user-name">Екзаменатор</p>
-        <p class="user-role">Admin Mode</p>
+      <div class="avatar">{{ isLoggedIn ? 'E' : '?' }}</div>
+      <div style="flex-grow: 1; overflow: hidden;">
+        <p class="user-name" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+          {{ isLoggedIn ? (userLogin || 'Викладач') : 'Гість' }}
+        </p>
+        <p class="user-role">{{ isLoggedIn ? 'Examiner' : 'Не авторизовано' }}</p>
+      </div>
+      <div>
+        @if (isLoggedIn) {
+          <button (click)="logout()" title="Вийти" style="background: none; border: none; cursor: pointer; font-size: 16px; color: #ef4444;">
+            🚪
+          </button>
+        } @else {
+          <a routerLink="/login" title="Увійти" style="text-decoration: none; font-size: 13px; color: #1a56db; font-weight: 600;">
+            Вхід
+          </a>
+        }
       </div>
     </div>
   </aside>
 
   <main class="main-content">
     <header class="top-bar">
-      <h2>Система верифікації особистості</h2>
-      <div class="system-status">
-        <div class="status-group">
-          <span class="status-dot online"></span>
-          <span>AI Core: Active</span>
-        </div>
-        <div class="status-group">
-          <span class="status-dot online"></span>
-          <span>Broker: Connected</span>
-        </div>
+      <div class="status-group">
+        <span class="status-dot online"></span>
+        <span class="system-status">Система активна &bull; AI Inference Online &bull; Nginx Gateway</span>
+      </div>
+      <div>
+        @if (!isLoggedIn) {
+          <a routerLink="/login" style="display: inline-block; padding: 6px 14px; background: #008080; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500;">
+            🔑 Увійти як викладач (admin)
+          </a>
+        }
       </div>
     </header>
 

@@ -1,0 +1,114 @@
+<div class="builder-wrap">
+
+  <div class="card settings-card">
+    <div class="card-header">
+      <h3>📅 Налаштування іспиту</h3>
+    </div>
+    
+    <div class="settings-grid">
+      <div class="input-group full">
+        <label>Назва дисципліни <span class="required">*</span></label>
+        <input type="text" [(ngModel)]="exam.title" placeholder="Напр: Об'єктно-орієнтоване програмування">
+      </div>
+      
+      <div class="input-group full">
+        <label>Опис (необов'язково)</label>
+        <input type="text" [(ngModel)]="exam.description" placeholder="Короткий опис іспиту для студентів">
+      </div>
+      
+      <div class="input-group">
+        <label>Дата та час початку <span class="required">*</span></label>
+        <input type="datetime-local" [(ngModel)]="exam.startTime">
+      </div>
+      
+      <div class="input-group">
+        <label>Тривалість (хв) <span class="required">*</span></label>
+        <input type="number" [(ngModel)]="exam.durationMinutes" min="10" max="300">
+      </div>
+    </div>
+  </div>
+
+ <div class="questions-list">
+    @for (q of questions; track $index; let qIndex = $index) {
+      <div class="card question-card">
+        
+        <div class="q-header">
+          <span class="q-num">Питання {{ qIndex + 1 }}</span>
+          <div class="q-header-right">
+            <label>Балів:</label>
+            <input type="number" [(ngModel)]="q.points" min="1" max="10" class="points-input">
+            <button class="btn-icon btn-danger" 
+                    (click)="removeQuestion(qIndex)" 
+                    [disabled]="questions.length === 1"
+                    title="Видалити питання">✕</button>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label>Текст питання <span class="required">*</span></label>
+          <textarea [(ngModel)]="q.text" rows="2" placeholder="Введіть текст питання..."></textarea>
+        </div>
+
+        <div class="options-section">
+          <label class="options-label">Варіанти відповідей (виберіть правильний)</label>
+          
+          @for (opt of q.options; track $index; let optIndex = $index) {
+            <div class="option-row" [class.is-correct]="q.correctIndex === optIndex">
+              
+              <input type="radio" 
+                     [name]="'correct_' + qIndex" 
+                     [value]="optIndex" 
+                     [(ngModel)]="q.correctIndex" 
+                     title="Відмітити як правильну відповідь">
+              
+              <input type="text" [(ngModel)]="opt.text" [placeholder]="'Варіант ' + (optIndex + 1)">
+              
+              <button class="btn-icon btn-danger" 
+                      (click)="removeOption(q, optIndex)" 
+                      [disabled]="q.options.length <= 2">✕</button>
+            </div>
+          }
+          
+          <div class="options-footer">
+            <button class="btn-ghost btn-sm" 
+                    (click)="addOption(q)" 
+                    [disabled]="q.options.length >= 6">
+              + Додати варіант
+            </button>
+            <small class="hint">Поточна правильна відповідь: <strong>Варіант {{ q.correctIndex + 1 }}</strong></small>
+          </div>
+        </div>
+
+      </div>
+    }
+  </div>
+
+  <button class="btn-add-question" (click)="addQuestion()">
+    + Додати нове питання
+  </button>
+
+  @if (errorMsg) {
+    <div class="msg error">⚠ {{ errorMsg }}</div>
+  }
+  @if (successMsg) {
+    <div class="msg success">✅ {{ successMsg }}</div>
+  }
+
+  <div class="actions-footer">
+    <div class="stats">
+      <span class="stat-badge">{{ questions.length }} питань</span>
+      <span class="stat-badge total-points">{{ getTotalPoints() }} балів</span>
+    </div>
+    
+    <button class="btn-primary" 
+            (click)="createExam()" 
+            [disabled]="saving || !isValid()">
+      @if (saving) {
+        <span class="spinner"></span> Збереження...
+      } @else {
+        Зберегти та активувати іспит
+      }
+    </button>
+  </div>
+
+</div>

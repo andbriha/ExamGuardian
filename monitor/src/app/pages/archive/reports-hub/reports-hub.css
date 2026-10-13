@@ -1,0 +1,33 @@
+.hub-wrap { padding: 24px; max-width: 1000px; margin: 0 auto; color: #1a1d23; font-family: system-ui, sans-serif; }
+.header { margin-bottom: 30px; }
+.header h2 { margin: 0 0 8px 0; font-size: 1.8rem; }
+.header p { margin: 0; color: #6b7280; font-size: 0.95rem; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
+
+.report-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; transition: transform 0.2s; display: flex; flex-direction: column; }
+.report-card:hover { transform: translateY(-3px); box-shadow: 0 8px 12px -3px rgba(0,0,0,0.05); border-color: #cbd5e1; }
+.report-card.card-aborted { background: #fafafa; border-style: dashed; }
+
+.card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+
+/* BADGES */
+.badge-status { font-size: 0.75rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; }
+.badge-passed { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.badge-failed { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.badge-aborted { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+
+.date { font-size: 0.85rem; color: #6b7280; font-family: monospace; }
+
+.title { margin: 0 0 8px 0; font-size: 1.2rem; color: #111827; }
+.group { margin: 0 0 20px 0; font-size: 0.9rem; color: #4b5563; }
+
+.metrics { display: flex; gap: 24px; margin-bottom: 20px; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #f1f5f9; }
+.metric { display: flex; flex-direction: column; gap: 4px; }
+.m-label { font-size: 0.75rem; color: #6b7280; text-transform: uppercase; font-weight: 600; }
+.m-val { font-size: 1.1rem; font-weight: 700; color: #1f2937; }
+.text-red { color: #ef4444; }
+.text-muted { color: #94a3b8; font-weight: 500; }
+
+.btn-pdf { background: #fff; color: #0d9e7e; border: 1px solid #0d9e7e; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
+.btn-pdf:hover { background: #0d9e7e; color: #fff; }
