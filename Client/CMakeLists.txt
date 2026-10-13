@@ -4,31 +4,53 @@ project(Client VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick Concurrent Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Quick Concurrent Multimedia Network)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
 qt_add_executable(appClient
-    main.cpp
+    src/main.cpp
 )
 
 qt_add_qml_module(appClient
     URI Client
     VERSION 0.1
     QML_FILES
-        Main.qml
-        LoginScreen.qml
-        ProcessCheckScreen.qml
-        MediaCheckScreen.qml
+        qml/Main.qml
+        qml/screens/LoginScreen.qml
+        qml/screens/AgreementScreen.qml
+        qml/screens/ProcessCheckScreen.qml
+        qml/screens/MediaCheckScreen.qml
+        qml/screens/ExamScreen.qml
     SOURCES
-        proctoring_module.h
-        proctoring_module.cpp
-        input_blocker.h
-        input_blocker.cpp
-        process_scanner.h
-        process_scanner.cpp
-        media_validator.h
-        media_validator.cpp
+        src/core/media_validator.h
+        src/core/media_validator.cpp
+        src/system/input_blocker.h
+        src/system/input_blocker.cpp
+        src/system/process_scanner.h
+        src/system/process_scanner.cpp
+        src/system/environment_detector.h
+        src/system/environment_detector.cpp
+        src/network/auth_service.h
+        src/network/auth_service.cpp
+        src/network/ml_api_client.h
+        src/network/ml_api_client.cpp
+        src/network/core_api_client.h
+        src/network/core_api_client.cpp
+        src/viewmodels/process_viewmodel.h
+        src/viewmodels/process_viewmodel.cpp
+        src/viewmodels/media_viewmodel.h
+        src/viewmodels/media_viewmodel.cpp
+        src/viewmodels/exam_viewmodel.h
+        src/viewmodels/exam_viewmodel.cpp
+)
+
+target_include_directories(appClient PRIVATE
+    src
+    src/core
+    src/system
+    src/network
+    src/viewmodels
 )
 
 set_target_properties(appClient PROPERTIES
@@ -40,11 +62,11 @@ set_target_properties(appClient PROPERTIES
 
 
 target_link_libraries(appClient
-    PRIVATE Qt6::Quick Qt6::Concurrent Qt6::Multimedia
+    PRIVATE Qt6::Quick Qt6::Concurrent Qt6::Multimedia Qt6::Network
 )
 
 if(WIN32)
-    target_link_libraries(appClient PRIVATE user32 psapi)
+    target_link_libraries(appClient PRIVATE user32 psapi version)
 endif()
 
 include(GNUInstallDirs)

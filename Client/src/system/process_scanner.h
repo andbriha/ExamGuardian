@@ -14,10 +14,11 @@ public:
 
     void requestSnapshotAsync();
     QStringList getSuspiciousProcesses();
+    QStringList getSpoofedProcesses();
     bool saveSnapshotToFile(const QVariantList &snapshot);
+    QString calculateFileHash(const QString &filePath);
 
 signals:
-    // Сигнал, який спрацює, коли фоновий потік закінчить роботу
     void snapshotReady(QVariantList snapshot);
 
 private:
@@ -28,8 +29,9 @@ private:
 
     QHash<QString, CacheEntry> m_hashCache;
 
-    QString calculateFileHash(const QString &filePath);
-    QVariantList buildProcessSnapshot(); // Метод для фонового потоку
+    QVariantList buildProcessSnapshot();
+    QString getPeInternalName(const QString &filePath);
+    bool isPathSpoofed(const QString &processName, const QString &fullPath);
 };
 
 #endif // PROCESS_SCANNER_H
