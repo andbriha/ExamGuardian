@@ -1,0 +1,139 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "02. Container View (High-Level Architecture)"
+---
+
+# 2. Container View (High-Level Architecture)
+
+The Container View decomposes the **Online Proctoring System** into its high-level runtime units: executables, web applications, background microservices, reverse proxies, and persistent storage databases.
+
+---
+
+## 2.1 Container Inventory & Technology Stack
+
+The platform consists of seven primary architectural containers:
+
+```mermaid
+graph TD
+    subgraph Client Workstation
+        Client["Desktop Client\n(Qt 6.10 / C++17)"]
+        BrowserStudent["Student Web Browser\n(Downloads Client)"]
+    end
+
+    subgraph Edge Layer
+        Nginx["Edge Reverse Proxy\n(Nginx 1.25 Alpine / Port 80)"]
+        Portal["Student Portal\n(Static HTML5 / CSS3 / Vanilla JS)"]
+    end
+
+    subgraph Application Tier
+        CoreAPI["Core API Gateway\n(ASP.NET Core 9 / C# / Port 8080)"]
+        AIEngine["AI Inference Microservice\n(FastAPI / Python 3.11 / Port 8000)"]
+        MonitorPanel["Monitor Panel SPA\n(Angular 19 / TypeScript)"]
+    end
+
+    subgraph Data Tier
+        DB[("PostgreSQL 16 Alpine\n(Port 5432)")]
+        VideoStorage[("Exam Video Volumes\n(Core/ExamVideos/)")]
+    end
+
+    BrowserStudent -->|GET /landing/| Nginx
+    Nginx -->|Serves Static Files| Portal
+    Client -->|REST API & Video Chunks| Nginx
+    MonitorPanel -->|SignalR & REST| Nginx
+
+    Nginx -->|/api/*| CoreAPI
+    Nginx -->|/landing/*| Portal
+    Nginx -->|/*| MonitorPanel
+
+    CoreAPI -->|EF Core 9 SQL| DB
+    CoreAPI -->|Persists Chunks| VideoStorage
+    CoreAPI -->|POST /analyze (Keyframes & Audio)| AIEngine
+    AIEngine -->|POST /api/violations/report| CoreAPI
+```
+
+---
+
+## 2.2 Detailed Container Specifications
+
+### 1. Desktop Client (`Qt 6 / C++17`)
+* **Role:** Secure workstation application running locally on the student's Windows PC.
+* **Responsibilities:**
+  * Enforces full-screen kiosk lockdown using Windows API Low-Level Keyboard Hooks (`WH_KEYBOARD_LL`).
+  * Executes multi-vector Virtual Machine (VM) and Sandbox detection via CPUID and registry scans.
+  * Continuously scans running processes and verifies binary signatures to detect unauthorized software.
+  * Captures raw webcam frames (DirectShow) and system audio, compressing them into 60-second `.mp4` video chunks.
+  * Dispatches sampled keyframes (1–2 FPS) to the backend for real-time analysis.
+  * Renders the reactive exam questionnaire via Qt Quick / QML.
+
+### 2. Student Portal (`Static HTML5 / Nginx`)
+* **Role:** Lightweight landing page hosted under `/landing/`.
+* **Responsibilities:**
+  * Provides zero-friction access for candidates with pre-exam requirements and camera placement guidelines.
+  * Serves direct download links for the Windows installer (`Online_Proctoring_System_Setup.exe`) and portable standalone binary (`Online_Proctoring_System_Client.exe`).
+  * Features visual walkthroughs on how to proceed past Windows Defender SmartScreen warnings.
+
+### 3. Edge Reverse Proxy (`Nginx Alpine`)
+* **Role:** Primary ingress controller listening on port 80 (or 443 in production).
+* **Responsibilities:**
+  * Terminates HTTP traffic and routes requests cleanly across internal Docker services:
+    * `/api/` $\rightarrow$ ASP.NET Core API Gateway (`http://api:8080/api/`).
+    * `/landing/` $\rightarrow$ Static Student Portal files (`/usr/share/nginx/html/landing`).
+    * `/` $\rightarrow$ Angular Monitor Single Page Application.
+    * `/videos/` $\rightarrow$ Video chunk static streaming cache.
+  * Enforces maximum body upload limits (`client_max_body_size 50M;`) to accommodate multi-megabyte video chunks.
+  * Manages WebSocket upgrade headers (`Upgrade $http_upgrade`, `Connection "upgrade"`).
+
+### 4. Core API Gateway (`ASP.NET Core 9`)
+* **Role:** The central orchestrator and business logic engine of the platform.
+* **Responsibilities:**
+  * Issues and validates stateless JSON Web Tokens (JWT) for student candidates and proctors.
+  * Implements the examination session state machine (`Scheduled`, `InProgress`, `Completed`, `TerminatedByProctor`, `Cancelled`).
+  * Ingests violation reports from both the Qt desktop client and the AI microservice, assigning severity weights and timestamps.
+  * Receives, validates, and indexes rolling `.mp4` video chunks under `/app/ExamVideos/`.
+  * Hosts SignalR WebSocket hubs (`/hubs/exam-monitor`) broadcasting live student events, device heartbeats, and violation alerts to connected examiners.
+
+### 5. AI Inference Microservice (`Python 3.11 / FastAPI`)
+* **Role:** Asynchronous computer vision and audio anomaly detection engine.
+* **Responsibilities:**
+  * Processes base64 keyframes using YOLOv8 for prohibited handheld objects (smartphones, books) and unauthorized secondary persons.
+  * Solves 3D Perspective-n-Point (PnP) facial landmark geometry via MediaPipe Face Landmarker to compute Euler angles (Yaw, Pitch, Roll).
+  * Analyzes ear canal region crops for concealed wireless micro-earpieces.
+  * Detects vocal activity and whispering via WebRTC Voice Activity Detection (VAD).
+  * Immediately notifies the Core API Gateway via webhook (`POST /api/violations/report`) when anomaly thresholds are breached.
+
+### 6. Monitor Panel SPA (`Angular 19`)
+* **Role:** Web-based mission control panel for exam organizers and proctors.
+* **Responsibilities:**
+  * Displays active exam hubs, student rosters, and real-time candidate cards.
+  * Consumes SignalR WebSocket streams to render real-time violation toasts and audio alert pings.
+  * Features a custom multi-timeline video player allowing examiners to scrub through uploaded 60-second video chunks with clickable violation marker chips.
+  * Generates and prints official PDF academic integrity examination protocols with computed confidence scores ($0-100\%$).
+
+### 7. Relational Database (`PostgreSQL 16 Alpine`)
+* **Role:** Central persistent storage for relational entities.
+* **Responsibilities:**
+  * Manages relational schemas via Entity Framework Core Code-First migrations.
+  * Stores user accounts, cryptographic password hashes, student groups, exam question banks, active session states, timestamped violation logs, and video chunk indexes.
+
+---
+
+## 2.3 Network Protocols & Communication Flow
+
+| Origin | Destination | Protocol | Purpose / Payload |
+| :--- | :--- | :--- | :--- |
+| **Desktop Client** | **Core API** | HTTPS / REST (JSON) | Student login (`POST /api/auth/login`), fetch questions, session status polling |
+| **Desktop Client** | **Core API** | HTTPS (Multipart) | Upload 60-second `.mp4` video chunks (`POST /api/videoupload/{id}/chunk`) |
+| **Desktop Client** | **Core API** | HTTPS / REST (JSON) | Report local OS violations (VM detected, prohibited process, hotkey attempt) |
+| **Core API** | **AI Engine** | HTTP / REST (JSON) | Send sampled frames & audio buffers for asynchronous neural network inference |
+| **AI Engine** | **Core API** | HTTP / REST (JSON) | AI violation webhook dispatch (`POST /api/violations/report`) |
+| **Core API** | **PostgreSQL** | TCP / 5432 (Npgsql) | Entity Framework Core database queries and transactional updates |
+| **Monitor Panel** | **Core API** | WSS / SignalR | Bi-directional real-time alert feed & session status event streaming |
+| **Monitor Panel** | **Nginx / Core API** | HTTPS / HLS / MP4 | Video chunk retrieval and playback for violation timeline audits |
+
+---
+
+## 2.4 Bandwidth & Latency Budgets
+
+* **Real-time Keyframe Inference:** Sampled at 1–2 FPS per active student. Average frame payload: ~80 KB JPEG. With 100 concurrent students, incoming AI bandwidth is ~8 MB/s (64 Mbps).
+* **Continuous Video Recording:** Captured at 720p 15 FPS H.264 (600 kbps). 60-second chunks average ~4.5 MB. Uploads are staggered asynchronously over HTTP POST with client-side retry queues to absorb transient network drops without packet loss.
+* **Real-Time Alert Dispatch:** SignalR WebSocket payloads average under 500 bytes, ensuring proctors receive anomaly notifications within 200 ms of detection.

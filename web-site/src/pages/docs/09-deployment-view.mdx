@@ -1,0 +1,231 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "09. Deployment & Infrastructure Architecture"
+---
+
+# 9. Deployment View: Infrastructure & Docker Architecture
+
+The **Deployment View** maps software containers onto physical and virtual infrastructure nodes, illustrating network boundaries, volume persistence, reverse proxy routing, and production security hardening.
+
+---
+
+## 9.1 Infrastructure Topology & C4 Deployment Diagram
+
+The system is deployed using a containerized microservice topology managed via **Docker Compose**:
+
+<div class="mermaid">
+{`
+graph TD
+    subgraph ClientDevice["Student Workstation (Windows 10/11 64-bit)"]
+        ClientApp["Desktop Client\n(Online_Proctoring_System_Client.exe)"]
+        StudentBrowser["Student Web Browser"]
+    end
+
+    subgraph CloudHost["Production Server (Linux Ubuntu 22.04 LTS)"]
+        subgraph IngressLayer["Edge Ingress (Port 80 / 443)"]
+            Nginx["proctoring_nginx (Nginx 1.25 Alpine)\nReverse Proxy & Static Web Server"]
+        end
+
+        subgraph DockerNetwork["Internal Bridge Network (app_network)"]
+            API["proctoring_api (ASP.NET Core 9)\nPort 8080 (Internal)"]
+            AI["proctoring_ai (Python 3.11 / FastAPI)\nPort 8000 (Internal)"]
+            DB[("proctoring_db (PostgreSQL 16 Alpine)\nPort 5432 (Internal)")]
+        end
+
+        subgraph PersistentVolumes["Host Persistent Storage"]
+            V_DB[("postgres_data\n/var/lib/postgresql/data")]
+            V_Video[("ExamVideos Volume\n/app/ExamVideos/")]
+            V_DeepFace[("deepface_cache\n/root/.deepface/")]
+            V_Images[("shared_images\n/app/images/")]
+        end
+    end
+
+    StudentBrowser -->|GET /landing/| Nginx
+    ClientApp -->|HTTPS / WSS / Videos| Nginx
+
+    Nginx -->|Proxy: /api/*| API
+    Nginx -->|Proxy: /landing/*| Nginx
+    Nginx -->|Proxy: /* (Monitor)| Nginx
+    
+    API -->|TCP SQL Queries| DB
+    API -->|HTTP REST /analyze| AI
+    AI -->|HTTP Webhook /report| API
+
+    DB --- V_DB
+    API --- V_Video
+    AI --- V_DeepFace
+    API --- V_Images
+    AI --- V_Images
+`}
+</div>
+
+---
+
+## 9.2 Complete Docker Compose Configuration
+
+The following production `docker-compose.yml` orchestrates all system containers with health dependencies, automatic restarts, and isolated networking:
+
+```yaml
+version: "3.9"
+
+services:
+  # 1. Relational Database
+  db:
+    image: postgres:16-alpine
+    container_name: proctoring_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-ExamGuardianDB}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-SecurePassword123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+    restart: unless-stopped
+
+  # 2. ASP.NET Core API Gateway
+  api:
+    build:
+      context: ./Core
+      dockerfile: Dockerfile
+    container_name: proctoring_api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME:-ExamGuardianDB};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-SecurePassword123}
+      - Jwt__Key=${JWT__KEY}
+      - Jwt__Issuer=${JWT__ISSUER:-OnlineProctoringAPI}
+      - Jwt__Audience=${JWT__AUDIENCE:-OnlineProctoringClients}
+      - Jwt__LifetimeMinutes=${JWT__LIFETIME_MINUTES:-1440}
+      - AiService__ApiKey=${AiService__ApiKey}
+      - INFERENCE_IMAGES_PATH=/app/InferenceImages
+    volumes:
+      - shared_images:/app/InferenceImages
+      - ./Core/Core/ExamVideos:/app/ExamVideos
+    networks:
+      - app_network
+    restart: unless-stopped
+    depends_on:
+      - db
+
+  # 3. Python FastAPI AI Engine
+  ai_service:
+    build:
+      context: ./Inference
+      dockerfile: Dockerfile
+    container_name: proctoring_ai
+    environment:
+      - CORE_API_URL=http://api:8080/api/violations
+      - AI_API_KEY=${AiService__ApiKey}
+      - API_URL=http://api:8080/api
+      - JWT__KEY=${JWT__KEY}
+      - INFERENCE_IMAGES_PATH=/app/images
+    volumes:
+      - shared_images:/app/images
+      - deepface_cache:/root/.deepface
+    networks:
+      - app_network
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  # 4. Reverse Proxy, Angular Monitor & Student Landing
+  nginx:
+    build:
+      context: ./monitor
+      dockerfile: Dockerfile
+      args:
+        BACKEND_URL: ${BACKEND_URL:-http://localhost}
+    container_name: proctoring_nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./monitor/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./Landing:/usr/share/nginx/html/landing
+    networks:
+      - app_network
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  shared_images:
+  deepface_cache:
+
+networks:
+  app_network:
+    driver: bridge
+```
+
+---
+
+## 9.3 Environment Variables Reference (`.env`)
+
+| Variable Name | Default Value | Description |
+| :--- | :--- | :--- |
+| `DB_NAME` | `ExamGuardianDB` | PostgreSQL database name |
+| `DB_USER` | `postgres` | Database administrator username |
+| `DB_PASSWORD` | `[secure-random-secret]` | Database password |
+| `JWT__KEY` | `[256-bit-hmac-key]` | Symmetric key used for signing JWT authentication tokens |
+| `JWT__ISSUER` | `OnlineProctoringAPI` | Issuer claim in JWT tokens |
+| `JWT__AUDIENCE` | `OnlineProctoringClients` | Audience claim in JWT tokens |
+| `AiService__ApiKey`| `[hex-secret-token]` | Shared secret key for internal AI webhook authentication |
+| `BACKEND_URL` | `http://localhost` | Public domain or IP address of the deployment host |
+| `NGINX_PORT` | `80` | External HTTP ingress port |
+
+---
+
+## 9.4 Nginx Reverse Proxy Routing Configuration
+
+The edge reverse proxy (`monitor/nginx.conf`) manages path-based routing:
+
+```nginx
+server {
+    listen 80;
+    server_name localhost;
+    client_max_body_size 50M;
+
+    # 1. Core API REST Endpoints
+    location /api/ {
+        proxy_pass http://api:8080/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # 2. SignalR WebSockets (Real-time monitor alerts)
+    location /hubs/ {
+        proxy_pass http://api:8080/hubs/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # 3. Student Portal (Static Landing & Client Downloads)
+    location /landing/ {
+        alias /usr/share/nginx/html/landing/;
+        index index.html;
+        try_files $uri $uri/ /landing/index.html;
+    }
+
+    # 4. Examiner Monitor Panel (Angular SPA)
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+---
+
+## 9.5 Production Hardening Checklist
+
+1. **TLS / SSL Certificate:** Install Let's Encrypt using Certbot or place institution-issued SSL certificates in Nginx, redirecting port 80 to 443 with HTTP Strict Transport Security (HSTS).
+2. **Firewall Rules (`UFW`):** Only allow inbound ports `80`, `443`, and `SSH (22)`. Ensure database port `5432` and internal API ports `8080`, `8000` are strictly bound to Docker's internal bridge network and never exposed to the public internet.
+3. **Database Automated Backups:** Configure a daily cron task executing `pg_dump` into compressed off-site storage:
+   ```bash
+   docker exec -t proctoring_db pg_dump -U postgres ExamGuardianDB | gzip > /backups/db_$(date +%F).sql.gz
+   ```

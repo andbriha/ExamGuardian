@@ -1,0 +1,140 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "08. Runtime Dynamics & Sequence Diagrams"
+---
+
+# 8. Runtime View: System Dynamics & Sequence Diagrams
+
+The **Runtime View** illustrates the dynamic execution flows and communication patterns between system actors, client components, microservices, and databases during key operational scenarios.
+
+---
+
+## 8.1 Scenario 1: Authentication, OS Lockdown & Biometric Verification
+
+This sequence depicts the initialization phase before exam questions are revealed to the student candidate:
+
+<div class="mermaid">
+{`
+sequenceDiagram
+    autonumber
+    actor S as Student
+    participant C as Qt Desktop Client
+    participant API as Core API Gateway
+    participant AI as FastAPI AI Engine
+    participant DB as PostgreSQL
+
+    S->>C: Enters Login & Password
+    C->>API: POST /api/auth/login
+    API->>DB: Query User & Verify Password Hash
+    DB-->>API: User Data (Role: Student, Group: KN-21)
+    API-->>C: JWT Bearer Token & SessionId
+
+    Note over C: Local System & Hardware Audit
+    C->>C: EnvironmentDetector: CPUID, BIOS, Virtual Devices Check
+    C->>C: ProcessScanner: Traverses processes & PE signatures
+    
+    alt Virtual Machine or Prohibited Software Detected
+        C-->>S: Display Error: "Close Discord/VM to proceed"
+    else System Environment Clean
+        C-->>S: Display Biometric Privacy Policy
+        S->>C: Clicks "Accept Consent & Authorize Hardware"
+        C->>C: MediaValidator: Acquire DirectShow Camera & Mic
+        C->>AI: POST /api/v1/verify_session (Enrollment Reference Photo)
+        AI->>AI: DeepFace Face Verification & Liveness Validation
+        AI-->>C: Identity Confirmed (Match Score: 98.4%)
+        C->>API: POST /api/examsessions/{id}/start
+        API->>DB: Update Session Status -> "InProgress"
+        API-->>C: Exam Questions Bank Payload
+    end
+`}
+</div>
+
+---
+
+## 8.2 Scenario 2: Active Exam Session & Continuous AI Proctoring
+
+During the active exam, the desktop client runs in full lockdown while media feeds and telemetry are continuously audited:
+
+<div class="mermaid">
+{`
+sequenceDiagram
+    autonumber
+    actor S as Student
+    participant C as Qt Desktop Client
+    participant API as Core API Gateway
+    participant AI as FastAPI AI Engine
+    participant M as Angular Monitor Panel
+
+    Note over C: InputBlocker active: WH_KEYBOARD_LL hooks intercept Alt+Tab, Win Key
+
+    loop Continuous Media Chunking (Every 60 Seconds)
+        C->>C: DirectShow records 60s video chunk (H.264 / AAC)
+        C->>API: POST /api/videoupload/{sessionId}/chunk (Multipart MP4)
+        API->>API: Store chunk at /ExamVideos/{sessionId}/chunk_NNNN.mp4
+        API-->>C: 200 OK (Chunk indexed)
+    end
+
+    loop High-Frequency Keyframe Inference (Every 1-2 Seconds)
+        C->>API: POST /api/telemetry/frame (Base64 JPEG)
+        API->>AI: Forward keyframe for asynchronous analysis
+        
+        par Parallel Model Inference
+            AI->>AI: MediaPipe: 3D Head Pose (Yaw, Pitch, Roll)
+            AI->>AI: YOLOv8: Object Detection (Phone, Second Person)
+            AI->>AI: Ear Crop: Micro-Earpiece Foreign Object Classifier
+            AI->>AI: WebRTC VAD: Voice Activity & Whisper Detection
+        end
+
+        alt Anomaly Detected (e.g. Yaw < -0.19 for > 1.5s)
+            AI->>API: POST /api/violations/report (Webhook with Screenshot)
+            API->>API: Persist record to DB & Deduct Integrity Penalty
+            API->>M: SignalR Broadcast: OnViolationAlert(ViolationDto)
+            M->>M: Play sound chime & Render alert toast on proctor dashboard
+        end
+    end
+`}
+</div>
+
+---
+
+## 8.3 Scenario 3: Submission, Disqualification & Post-Exam Audit
+
+This sequence details the conclusion of the session, examiner video scrubbing, and official report generation:
+
+<div class="mermaid">
+{`
+sequenceDiagram
+    autonumber
+    actor S as Student
+    actor P as Examiner / Proctor
+    participant C as Qt Desktop Client
+    participant API as Core API Gateway
+    participant M as Angular Monitor Panel
+    participant DB as PostgreSQL
+
+    alt Option A: Student Submits Test Answers
+        S->>C: Clicks "Finish Exam"
+        C->>API: POST /api/examsessions/{id}/submit (Answers Payload)
+    else Option B: Proctor Disqualifies Student
+        P->>M: Clicks "Terminate Session" (Severe Violations)
+        M->>API: POST /api/examsessions/{id}/terminate
+        API->>C: SignalR Notification: TerminateExamNotice
+    end
+
+    C->>C: InputBlocker: Unhook WH_KEYBOARD_LL & Unlock OS
+    C->>C: Finalize & Flush remaining video chunk
+    C->>API: POST /api/videoupload/{sessionId}/chunk (Final Chunk)
+    API->>DB: Finalize Session (Status: Completed / Terminated)
+    API->>DB: Compute Final Test Grade & Net Integrity Score
+
+    Note over P, M: Post-Exam Proctor Audit
+    P->>M: Opens Reports Hub & Selects Student Session
+    M->>API: GET /api/videoupload/{sessionId}/chunks
+    API-->>M: Chunk Manifest [chunk_0, chunk_1, ...]
+    M->>API: GET /api/violations/session/{sessionId}
+    API-->>M: Violation Records List with Timestamps
+    M->>M: Render multi-chunk virtual video timeline with colored pins
+    P->>M: Clicks Violation Pin at 02:45 -> Player seeks directly to incident
+    P->>M: Clicks "Print Official Protocol" -> Exports PDF report
+`}
+</div>

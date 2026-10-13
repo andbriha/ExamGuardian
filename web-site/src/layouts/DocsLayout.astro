@@ -1,0 +1,73 @@
+---
+import '../styles/global.css'
+import Navigation from '../components/Navigation.astro'
+const { title } = Astro.props
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title} | Docs</title>
+  </head>
+  <body class="bg-white text-slate-900 min-h-screen flex flex-col">
+    <Navigation />
+    
+    <div class="flex-1 max-w-7xl mx-auto w-full flex flex-col md:flex-row">
+      <aside class="w-full md:w-72 border-r border-slate-200 p-6 bg-slate-50 overflow-y-auto h-[calc(100vh-4rem)] sticky top-0">
+        <nav class="flex flex-col gap-6">
+          
+          <div class="flex flex-col gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Level 1: Context</span>
+            <a href="/docs/01-system-context" class="text-slate-700 hover:text-sky-600 font-medium text-sm">System Context & Users</a>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Level 2: Containers</span>
+            <a href="/docs/02-container-view" class="text-slate-700 hover:text-sky-600 font-medium text-sm">High-Level Architecture</a>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Level 3: Components</span>
+            <a href="/docs/03-qt-client" class="text-slate-700 hover:text-sky-600 font-medium text-sm">Qt Desktop Client</a>
+            <a href="/docs/04-core-api" class="text-slate-700 hover:text-sky-600 font-medium text-sm">ASP.NET Core Gateway</a>
+            <a href="/docs/05-ai-engine" class="text-slate-700 hover:text-sky-600 font-medium text-sm">FastAPI AI Engine</a>
+            <a href="/docs/06-angular-monitor" class="text-slate-700 hover:text-sky-600 font-medium text-sm">Angular Monitor Panel</a>
+            <a href="/docs/07-student-portal" class="text-slate-700 hover:text-sky-600 font-medium text-sm">HTML Student Portal</a>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Dynamics & Flows</span>
+            <a href="/docs/08-runtime-view" class="text-slate-700 hover:text-sky-600 font-medium text-sm">Runtime View (Sequences)</a>
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Infrastructure</span>
+            <a href="/docs/09-deployment-view" class="text-slate-700 hover:text-sky-600 font-medium text-sm">Deployment & Docker</a>
+          </div>
+
+        </nav>
+      </aside>
+      
+      <main class="flex-1 px-6 py-8 md:px-12 w-full prose prose-slate max-w-4xl">
+          <slot />
+      </main>
+    </div>
+
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs'
+      mermaid.initialize({ startOnLoad: true, theme: 'default' })
+      
+      document.addEventListener('DOMContentLoaded', () => {
+        const codes = document.querySelectorAll('code.language-mermaid')
+        codes.forEach(code => {
+          const div = document.createElement('div')
+          div.className = 'mermaid'
+          div.textContent = code.textContent
+          code.parentNode.replaceWith(div)
+        })
+        mermaid.init(undefined, document.querySelectorAll('.mermaid'))
+      })
+    </script>
+  </body>
+</html>

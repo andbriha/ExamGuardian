@@ -1,0 +1,203 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "04. ASP.NET Core Gateway & Data Architecture"
+---
+
+# 4. Component View: ASP.NET Core Gateway
+
+The **Core API Gateway** is the central nervous system of the **Online Proctoring System**. Built with ASP.NET Core 9 and Entity Framework Core, it follows Clean Architecture and Domain-Driven Design (DDD) principles. It is responsible for authorization, state machine orchestration, video chunk indexing, AI webhook ingestion, and real-time SignalR WebSocket dispatching.
+
+---
+
+## 4.1 Layered Architecture
+
+The solution adheres to clean separation of concerns across three distinct layers:
+
+```mermaid
+graph TD
+    subgraph Presentation & Gateway Layer Core.Api
+        Controllers["REST Controllers\n(Auth, Exams, Sessions, Violations, VideoUpload)"]
+        Hubs["SignalR WebSocket Hubs\n(ExamMonitorHub)"]
+        Middlewares["Middlewares & Filters\n(JwtAuth, ApiKeyAuth, GlobalException)"]
+    end
+
+    subgraph Business Logic Layer BLL
+        AuthService["AuthService (JWT & Password Hashing)"]
+        ExamService["ExamService (State Machine & Logic)"]
+        SessionService["ExamSessionService (Lifecycle & Score)"]
+        ViolationService["ViolationAlertService (Anomaly Scoring)"]
+        VideoService["VideoStorageService (Chunk Indexing)"]
+        DTOs["Data Transfer Objects (DTOs) & Validators"]
+    end
+
+    subgraph Data Access Layer DAL
+        DbContext["AppDbContext (EF Core 9)"]
+        Repositories["Generic & Specialized Repositories"]
+        Entities["Database Entities (PostgreSQL Mappings)"]
+        Migrations["EF Core Code-First Migrations"]
+    end
+
+    Controllers --> BLL
+    Hubs --> BLL
+    BLL --> DAL
+    DbContext --> Entities
+```
+
+---
+
+## 4.2 Key Endpoints & API Data Contracts
+
+### 1. Authentication & Session Issuance
+* **Endpoint:** `POST /api/auth/login`
+* **Request:**
+  ```json
+  {
+    "login": "student_kn21_04",
+    "password": "SecurePassword123!"
+  }
+  ```
+* **Response:**
+  ```json
+  {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "d7a4f910-8b1e-4c3a-b852...",
+    "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "role": "Student",
+    "name": "Олександр Шевченко",
+    "group": "КН-2021-1"
+  }
+  ```
+
+### 2. AI Violation Ingestion Webhook
+* **Endpoint:** `POST /api/violations/report`
+* **Security:** Protected via internal service header: `X-AI-API-KEY: ${AiService__ApiKey}`
+* **Payload:**
+  ```json
+  {
+    "sessionId": "b81e4c3a-8b1e-4c3a-b852-2c963f66afa6",
+    "violationType": "LookingLeft_NotesHint",
+    "severity": "Warning",
+    "confidence": 0.88,
+    "timestampSeconds": 142.5,
+    "evidenceImagePath": "/images/evidence_b81e_142.jpg",
+    "description": "Head yaw angle -0.24 sustained for > 2.0s indicating glance at lateral cheat sheet"
+  }
+  ```
+* **Processing:** Persists record to PostgreSQL `Violations` table, recomputes the student's integrity penalty, and broadcasts an alert to the Angular Monitor via SignalR.
+
+### 3. Video Chunk Upload & Storage
+* **Endpoint:** `POST /api/videoupload/{sessionId}/chunk`
+* **Method:** `multipart/form-data`
+  * `chunkIndex`: integer (e.g. `0`, `1`, `2`)
+  * `startTime`: float (e.g. `0.0`, `60.0`, `120.0`)
+  * `duration`: float (e.g. `60.0`)
+  * `file`: binary video stream (`chunk_002.mp4`)
+* **Storage Location:** Saved deterministically on disk at `/app/ExamVideos/{sessionId}/chunk_{chunkIndex:D4}.mp4`.
+* **Metadata Endpoint:** `GET /api/videoupload/{sessionId}/chunks`
+  * Returns an ordered manifest of available chunks for sequential browser video playback:
+  ```json
+  [
+    { "index": 0, "startTime": 0.0, "duration": 60.0, "url": "/videos/b81e4c3a/chunk_0000.mp4" },
+    { "index": 1, "startTime": 60.0, "duration": 60.0, "url": "/videos/b81e4c3a/chunk_0001.mp4" }
+  ]
+  ```
+
+---
+
+## 4.3 Examination Session State Machine
+
+The examination session lifecycle follows a deterministic finite state machine to prevent race conditions or unauthorized retries:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Scheduled: Exam Assigned to Group
+    Scheduled --> InProgress: Student Connects & Passes Checks
+    Scheduled --> Cancelled: Time Window Expired / Student Absent
+
+    InProgress --> Completed: Normal Submission
+    InProgress --> TerminatedByProctor: Forcefully Disqualified by Examiner
+    InProgress --> ConnectionLost: Heartbeat Timeout (> 90s)
+
+    ConnectionLost --> InProgress: Student Reconnected with Valid Token
+    ConnectionLost --> Cancelled: Reconnection Timeout Expired (> 5 min)
+
+    Completed --> [*]
+    TerminatedByProctor --> [*]
+    Cancelled --> [*]
+```
+
+### Integrity Scoring Engine
+The final Academic Integrity Score is calculated automatically on a 0 - 100% scale:
+
+```text
+Integrity Score = max(0, 100 - SUM(weight_i))
+```
+
+Where violation weights are calibrated as follows:
+* **Critical (weight = 25):** Unauthorized smartphone detected, secondary person in frame, micro-earpiece detected, virtual machine hypervisor detected.
+* **Warning (weight = 8):** Sustained glance away from screen (|yaw| > 0.19 or pitch > 0.17), voice activity/whispering, prohibited background process closed late.
+* **Info (weight = 2):** Brief single-frame face occlusion, low light level warning.
+
+---
+
+## 4.4 Entity Relationship Diagram (ERD)
+
+```mermaid
+erDiagram
+    USERS ||--o{ EXAM_SESSIONS : attends
+    STUDENT_GROUPS ||--o{ USERS : contains
+    EXAMS ||--o{ EXAM_SESSIONS : instantiated_by
+    EXAMS ||--o{ QUESTIONS : contains
+    QUESTIONS ||--o{ OPTIONS : has
+    EXAM_SESSIONS ||--o{ VIOLATIONS : logs
+    EXAM_SESSIONS ||--o{ VIDEO_CHUNKS : stores
+
+    USERS {
+        uuid id PK
+        string login
+        string password_hash
+        string full_name
+        string role
+        uuid group_id FK
+    }
+
+    EXAMS {
+        uuid id PK
+        string title
+        string subject
+        int duration_minutes
+        datetime start_time
+        datetime end_time
+    }
+
+    EXAM_SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        uuid exam_id FK
+        string status
+        float test_score
+        float integrity_score
+        datetime started_at
+        datetime finished_at
+    }
+
+    VIOLATIONS {
+        uuid id PK
+        uuid session_id FK
+        string type
+        string severity
+        float confidence
+        float timestamp_seconds
+        string description
+        string evidence_image_path
+    }
+
+    VIDEO_CHUNKS {
+        uuid id PK
+        uuid session_id FK
+        int chunk_index
+        float start_time
+        float duration_seconds
+        string file_path
+    }
+```
