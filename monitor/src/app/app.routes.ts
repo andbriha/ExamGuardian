@@ -1,3 +1,4 @@
+import { examinerGuard } from './auth/examiner.guard';
 import { Routes } from '@angular/router';
 
 // Users
@@ -23,20 +24,20 @@ export const routes: Routes = [
   { path: 'login', component: AuthComponent, title: 'Вхід | Online Proctoring System' },
   
   // Users
-  { path: 'students', component: StudentsComponent, title: 'База студентів | Online Proctoring System' },
-{ path: 'add-student', component: AddStudentComponent, title: 'Додати студента | Online Proctoring System' },
-  { path: 'student/:id', component: StudentDetailComponent, title: 'Профіль студента | Online Proctoring System' },
+  { path: 'students', component: StudentsComponent, canActivate: [examinerGuard], title: 'База студентів | Online Proctoring System' },
+{ path: 'add-student', component: AddStudentComponent, canActivate: [examinerGuard], title: 'Додати студента | Online Proctoring System' },
+  { path: 'student/:id', component: StudentDetailComponent, canActivate: [examinerGuard], title: 'Профіль студента | Online Proctoring System' },
   // Setup
-  { path: 'exams', component: ExamsComponent, title: 'Керування іспитами | Online Proctoring System' },
-  { path: 'create-exam', component: ExamBuilderComponent, title: 'Створення іспиту | Online Proctoring System' },
+  { path: 'exams', component: ExamsComponent, canActivate: [examinerGuard], title: 'Керування іспитами | Online Proctoring System' },
+  { path: 'create-exam', component: ExamBuilderComponent, canActivate: [examinerGuard], title: 'Створення іспиту | Online Proctoring System' },
   
   // Live
-  { path: 'monitoring', component: ActiveExamsHubComponent, title: 'Активні іспити | Online Proctoring System' },
-  { path: 'monitor/:id', component: MonitorComponent, title: 'Live Моніторинг | Online Proctoring System' },
+  { path: 'monitoring', component: ActiveExamsHubComponent, canActivate: [examinerGuard], title: 'Активні іспити | Online Proctoring System' },
+  { path: 'monitor/:id', component: MonitorComponent, canActivate: [examinerGuard], title: 'Live Моніторинг | Online Proctoring System' },
   
   // Archive
-  { path: 'reports', component: ReportsHubComponent, title: 'Звіти | Online Proctoring System' },
-  { path: 'violation/:id', component: ViolationDetailComponent, title: 'Деталі порушення | Online Proctoring System' },
+  { path: 'reports', component: ReportsHubComponent, canActivate: [examinerGuard], title: 'Звіти | Online Proctoring System' },
+  { path: 'violation/:id', component: ViolationDetailComponent, canActivate: [examinerGuard], title: 'Деталі порушення | Online Proctoring System' },
   
   { path: '**', redirectTo: 'exams' }
 ];

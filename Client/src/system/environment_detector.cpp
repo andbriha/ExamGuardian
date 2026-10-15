@@ -1,4 +1,7 @@
 #include "environment_detector.h"
+#include "vm_policy.h"
+#include "vm_windows.h"
+#include <QDir>
 #include <QNetworkInterface>
 #include <QSettings>
 #include <QMediaDevices>
@@ -12,6 +15,8 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <intrin.h>
+#elif defined(Q_OS_LINUX) && (defined(__i386__) || defined(__x86_64__))
+#include <cpuid.h>
 #endif
 
 EnvironmentDetector::EnvironmentDetector(QObject* parent) : QObject(parent) {}
@@ -64,12 +69,14 @@ bool EnvironmentDetector::checkRegistry() const {
         }
     }
 
-    // 2. Перевірка SCSI / Disk контролера
-    QSettings scsi("HKEY_LOCAL_MACHINE\\HARDWARE\\DEVICEMAP\\Scsi\\Scsi Port 0\\Scsi Bus 0\\Target Id 0\\Logical Unit Id 0", QSettings::NativeFormat);
-    QString scsiId = scsi.value("Identifier").toString().toLower();
-    if (scsiId.contains("vbox") || scsiId.contains("vmware") || scsiId.contains("qemu") || scsiId.contains("virtio")) {
-        m_detectedVmInfo += QString("[SCSI Disk: %1] ").arg(scsiId);
-        return true;
+#elif defined(Q_OS_LINUX)
+    QString combined;
+    for (const auto &name : {"sys_vendor", "product_name", "board_vendor"}) {
+        QFile file(QString("/sys/class/dmi/id/") + name);
+        if (file.open(QIODevice::ReadOnly)) combined += QString::fromUtf8(file.readAll()).toLower();
+    }
+    for (const auto &keyword : {"vmware", "virtualbox", "qemu", "kvm", "virtual machine", "xen"}) {
+        if (combined.contains(keyword)) { m_detectedVmInfo += QString("[DMI: %1] ").arg(keyword); return true; }
     }
 #endif
     return false;
@@ -80,7 +87,7 @@ bool EnvironmentDetector::checkCPUID(QString &hypervisorVendor) const {
     int cpuInfo[4] = {0};
     __cpuid(cpuInfo, 1);
     // 31-й біт ECX вказує на наявність гіпервізора (Hypervisor Present Bit)
-    bool hypervisorPresent = (cpuInfo[2] & (1 << 31)) != 0;
+    bool hypervisorPresent = (cpuInfo[2] & (1u << 31)) != 0;
 
     if (hypervisorPresent) {
         // Отримуємо назву вендора гіпервізора з leaf 0x40000000
@@ -96,20 +103,25 @@ bool EnvironmentDetector::checkCPUID(QString &hypervisorVendor) const {
         m_detectedVmInfo += QString("[CPUID Hypervisor: %1] ").arg(hypervisorVendor);
         return true;
     }
+#elif defined(Q_OS_LINUX) && (defined(__i386__) || defined(__x86_64__))
+    unsigned int a, b, c, d;
+    __cpuid(1, a, b, c, d);
+    if (c & (1u << 31)) {
+        __cpuid(0x40000000, a, b, c, d);
+        char vendor[13] = {}; memcpy(vendor, &b, 4); memcpy(vendor+4, &c, 4); memcpy(vendor+8, &d, 4);
+        hypervisorVendor = QString::fromLatin1(vendor).trimmed();
+        m_detectedVmInfo += QString("[CPUID: %1] ").arg(hypervisorVendor); return true;
+    }
 #endif
     return false;
 }
 
 bool EnvironmentDetector::checkVmDriverFiles() const {
 #ifdef _WIN32
-    QStringList driverPaths = {
-        "C:\\Windows\\System32\\drivers\\VBoxMouse.sys",
-        "C:\\Windows\\System32\\drivers\\VBoxGuest.sys",
-        "C:\\Windows\\System32\\drivers\\VBoxSF.sys",
-        "C:\\Windows\\System32\\drivers\\vmmouse.sys",
-        "C:\\Windows\\System32\\drivers\\vmhgfs.sys",
-        "C:\\Windows\\System32\\drivers\\vmbus.sys"
-    };
+    const QString drivers = QDir(qEnvironmentVariable("SystemRoot", "C:/Windows")).filePath("System32/drivers/");
+    QStringList driverPaths;
+    for (const auto *name : {"VBoxMouse.sys", "VBoxGuest.sys", "VBoxSF.sys", "vmmouse.sys", "vmhgfs.sys"})
+        driverPaths << drivers + QLatin1String(name);
 
     for (const QString &path : driverPaths) {
         if (QFile::exists(path)) {
@@ -138,21 +150,33 @@ bool EnvironmentDetector::checkDiskSignatures() const {
 
 int EnvironmentDetector::calculateVmScore() const {
     m_detectedVmInfo.clear();
-    int score = 0;
-
-    QString hvVendor;
-    if (checkCPUID(hvVendor)) score += 55;
-    if (checkRegistry()) score += 35;
-    if (checkVmDriverFiles()) score += 30;
-    if (checkVirtualMac()) score += 20;
-    if (checkDiskSignatures()) score += 25;
-
+    VmEvidence evidence;
+    QString vendor;
+    evidence.hypervisor = checkCPUID(vendor);
+    evidence.microsoftHypervisor = vendor == "Microsoft Hv";
+    evidence.knownGuestHypervisor = evidence.hypervisor &&
+        (vendor.contains("VMware", Qt::CaseInsensitive) || vendor.contains("VBox", Qt::CaseInsensitive) ||
+         vendor.contains("KVM", Qt::CaseInsensitive) || vendor.contains("Xen", Qt::CaseInsensitive) ||
+         vendor.contains("prl", Qt::CaseInsensitive) || vendor.contains("TCG", Qt::CaseInsensitive));
+    const auto native = collectWindowsVmEvidence();
+    evidence.firmware = checkRegistry() || native.firmware;
+    evidence.devices = native.devices;
+    evidence.runningGuestDrivers = native.drivers;
+    evidence.runningGuestService = native.services;
+    evidence.activeRuntime = native.activeRuntime;
+    evidence.runtimeProbeFailed = native.runtimeProbeFailed;
+    evidence.driverFiles = checkVmDriverFiles();
+    evidence.network = checkVirtualMac();
+    evidence.disk = checkDiskSignatures();
+    m_detectedVmInfo += native.details.join(' ');
+    const int score = vmEvidenceScore(evidence);
+    m_detectedVmInfo += QString(" [Strict virtualization policy: %1/50]").arg(score);
     return score;
 }
 
 bool EnvironmentDetector::isVirtualMachine() const {
     int score = calculateVmScore();
-    return score >= 45;
+    return score >= 50;
 }
 
 QString EnvironmentDetector::getVmDetails() const {

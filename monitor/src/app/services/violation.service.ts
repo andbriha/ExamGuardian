@@ -12,7 +12,11 @@ export interface ViolationAlertDto {
   evidenceUrl?: string;
   metadata?: string;
   timestamp: string;
+  eventId: string;
   isReviewed: boolean;
+  reviewDecision: "Pending" | "Confirmed" | "Dismissed" | "LegacyReviewed";
+  reviewNotes?: string;
+  reviewedAt?: string;
 }
 
 export interface VideoChunkDto {
@@ -20,6 +24,7 @@ export interface VideoChunkDto {
   fileName: string;
   sizeBytes: number;
   url: string;
+  metadata?: { startOffsetSeconds?: number; durationSeconds?: number; stream: string; sha256?: string };
 }
 
 @Injectable({
@@ -42,11 +47,12 @@ export class ViolationService {
     return this.http.get<ViolationAlertDto[]>(`${this.apiUrl}/by-session/${sessionId}`);
   }
 
-  markAsReviewed(id: number): Observable<void> {
-    return this.http.patch<void>(`${this.apiUrl}/${id}/review`, {});
+  markAsReviewed(id: number, decision: "Confirmed" | "Dismissed", notes: string): Observable<void> {
+    return this.http.patch<void>(`${this.apiUrl}/${id}/review`, { decision, notes });
   }
 
-  getVideoChunks(sessionId: string | number): Observable<VideoChunkDto[]> {
-    return this.http.get<VideoChunkDto[]>(`${environment.apiUrl}/video/${sessionId}/chunks`);
+  getVideoChunks(sessionId: string | number, stream: "camera" | "screen" = "camera"): Observable<VideoChunkDto[]> {
+    return this.http.get<VideoChunkDto[]>(`${environment.apiUrl}/video/${sessionId}/chunks?stream=${stream}`);
   }
+  getEvidence(eventId: string): Observable<Blob> { return this.http.get(`${this.apiUrl}/evidence/${eventId}`, {responseType: 'blob'}); }
 }

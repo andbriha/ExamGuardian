@@ -3,229 +3,81 @@ layout: ../../layouts/DocsLayout.astro
 title: "09. Deployment & Infrastructure Architecture"
 ---
 
-# 9. Deployment View: Infrastructure & Docker Architecture
+import Mermaid from '../../components/Mermaid.astro';
 
-The **Deployment View** maps software containers onto physical and virtual infrastructure nodes, illustrating network boundaries, volume persistence, reverse proxy routing, and production security hardening.
+> This chapter defines the system architecture and operating contract. The [implementation and validation record](/docs/11-current-contract) reports which behavior has been verified in the current checkout.
 
----
+# 9. Deployment View: Development and Production
 
-## 9.1 Infrastructure Topology & C4 Deployment Diagram
+ExamGuardian runs in two isolated environments. Both environments run the same API, AI, panel and landing page. Development adds reload services, Astro documentation and a native client menu for disabling local restrictions. Production excludes that menu. Neither mode seeds sample data.
 
-The system is deployed using a containerized microservice topology managed via **Docker Compose**:
+## 9.1 Environment topology
 
-<div class="mermaid">
-{`
-graph TD
-    subgraph ClientDevice["Student Workstation (Windows 10/11 64-bit)"]
-        ClientApp["Desktop Client\n(Online_Proctoring_System_Client.exe)"]
-        StudentBrowser["Student Web Browser"]
-    end
+<Mermaid source={"flowchart TB\n  Launcher[\"run.ps1\"] -->|\"Default\"| Dev[\"Development project\"]\n  Launcher -->|\"--production / Cyrillic alias\"| Prod[\"Production project\"]\n  Dev --> DevClient[\"Native DEV Qt client and override window\"]\n  Dev --> DevStack[\"API / AI / PostgreSQL / media / SQLite\"]\n  Dev --> Docs[\"Astro documentation :4321\"]\n  Prod --> ProdClient[\"Production Qt client \u2014 no override code\"]\n  Prod --> ProdStack[\"Immutable API / AI / PostgreSQL / media / SQLite\"]\n  Prod --> TLS[\"Nginx HTTPS origin\"]\n  DevStack -.->|\"Independent data, networks and keys\"| ProdStack"} />
 
-    subgraph CloudHost["Production Server (Linux Ubuntu 22.04 LTS)"]
-        subgraph IngressLayer["Edge Ingress (Port 80 / 443)"]
-            Nginx["proctoring_nginx (Nginx 1.25 Alpine)\nReverse Proxy & Static Web Server"]
-        end
+| Property | Development | Production |
+|---|---|---|
+| Default launch | `./run.ps1` | `./run.ps1 --production` |
+| Alternate production argument | — | `--продакшн` |
+| Compose project | `examguardian-dev` | `examguardian-prod` |
+| API environment | `Development` | `Production` |
+| Application origin | `http://127.0.0.1:8081` | Configured institution HTTPS origin |
+| Documentation | Astro service at `http://127.0.0.1:4321` | No Astro development service |
+| Source updates | Source mounts and watch/reload | Immutable versioned images |
+| Student client | DEV build with controlled overrides | Production build without override resources |
+| Accounts and signing keys | Independent accounts and keys | Institution accounts and independent keys |
+| Database, media and SQLite | Development volumes | Production volumes |
 
-        subgraph DockerNetwork["Internal Bridge Network (app_network)"]
-            API["proctoring_api (ASP.NET Core 9)\nPort 8080 (Internal)"]
-            AI["proctoring_ai (Python 3.11 / FastAPI)\nPort 8000 (Internal)"]
-            DB[("proctoring_db (PostgreSQL 16 Alpine)\nPort 5432 (Internal)")]
-        end
+The two projects run concurrently. Networks, secrets, data volumes, dependency volumes and client queues do not cross the environment boundary. Fixed `container_name` values and shared external data volumes are excluded from the base topology.
 
-        subgraph PersistentVolumes["Host Persistent Storage"]
-            V_DB[("postgres_data\n/var/lib/postgresql/data")]
-            V_Video[("ExamVideos Volume\n/app/ExamVideos/")]
-            V_DeepFace[("deepface_cache\n/root/.deepface/")]
-            V_Images[("shared_images\n/app/images/")]
-        end
-    end
+## 9.2 Launcher and configuration
 
-    StudentBrowser -->|GET /landing/| Nginx
-    ClientApp -->|HTTPS / WSS / Videos| Nginx
+`run.ps1` parses the environment before touching Docker. No argument selects development; either production argument selects production. Unknown/conflicting arguments fail. A failed production launch never falls back to development.
 
-    Nginx -->|Proxy: /api/*| API
-    Nginx -->|Proxy: /landing/*| Nginx
-    Nginx -->|Proxy: /* (Monitor)| Nginx
-    
-    API -->|TCP SQL Queries| DB
-    API -->|HTTP REST /analyze| AI
-    AI -->|HTTP Webhook /report| API
+The launcher resolves repository paths, loads one explicit environment file, validates Docker/ports/prerequisites, and invokes Compose with explicit project name, env file and profile files. Readiness checks cover PostgreSQL, Core and AI. Documentation starts independently of model warmup. Startup prints environment, origins, build versions, health and log/stop commands without disclosing secrets.
 
-    DB --- V_DB
-    API --- V_Video
-    AI --- V_DeepFace
-    API --- V_Images
-    AI --- V_Images
-`}
-</div>
+| File | Responsibility |
+|---|---|
+| `run.ps1` | Environment selection and entry point |
+| `scripts/Start-Environment.ps1` | Prerequisite validation, Compose launch and readiness |
+| `scripts/Stop-Environment.ps1` | Stop only the selected project while preserving its volumes |
+| `compose.base.yml` | Shared service topology and internal network relationships |
+| `compose.dev.yml` | Source mounts, reload processes, loopback ports and Astro service |
+| `compose.production.yml` | Immutable images, production environment, HTTPS and restricted ingress |
+| `.env.dev.example` / `.env.production.example` | Separate configuration contracts; no real secrets |
 
----
+Development initialization generates missing random secrets and preserves an existing configuration. Production requires configured signing/API keys, bootstrap credentials where applicable, HTTPS origin and certificate paths. Invalid configuration stops with missing field names, not secret values.
 
-## 9.2 Complete Docker Compose Configuration
+A normal stop never uses `down --volumes`. Existing `proctoring_*` installations are migrated separately after a checkpoint and restore verification.
 
-The following production `docker-compose.yml` orchestrates all system containers with health dependencies, automatic restarts, and isolated networking:
+## 9.3 Development services and automatic documentation
 
-```yaml
-version: "3.9"
+Core uses `dotnet watch`; AI uses reload; Angular uses its development server. Source edits update the corresponding service without rebuilding the complete stack. Dependency changes rebuild the affected image.
 
-services:
-  # 1. Relational Database
-  db:
-    image: postgres:16-alpine
-    container_name: proctoring_db
-    environment:
-      POSTGRES_DB: ${DB_NAME:-ExamGuardianDB}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-SecurePassword123}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app_network
-    restart: unless-stopped
+The documentation service uses `web-site/Dockerfile.dev`, Node 24, the npm lockfile and a separate dependency volume. It runs `npm run dev -- --host 0.0.0.0 --port 4321 --ignore-lock` inside the container. The host mapping is `127.0.0.1:4321:4321`; the host port is configurable if another local service occupies it. Source changes update the documentation automatically. Its health check uses the documentation entry point.
 
-  # 2. ASP.NET Core API Gateway
-  api:
-    build:
-      context: ./Core
-      dockerfile: Dockerfile
-    container_name: proctoring_api
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME:-ExamGuardianDB};Username=${DB_USER:-postgres};Password=${DB_PASSWORD:-SecurePassword123}
-      - Jwt__Key=${JWT__KEY}
-      - Jwt__Issuer=${JWT__ISSUER:-OnlineProctoringAPI}
-      - Jwt__Audience=${JWT__AUDIENCE:-OnlineProctoringClients}
-      - Jwt__LifetimeMinutes=${JWT__LIFETIME_MINUTES:-1440}
-      - AiService__ApiKey=${AiService__ApiKey}
-      - INFERENCE_IMAGES_PATH=/app/InferenceImages
-    volumes:
-      - shared_images:/app/InferenceImages
-      - ./Core/Core/ExamVideos:/app/ExamVideos
-    networks:
-      - app_network
-    restart: unless-stopped
-    depends_on:
-      - db
+Compose owns the container process lifecycle, so Astro uses `--ignore-lock` to avoid stale host/PID lock records after container restarts. Documentation starts as a background Compose service. Opening its URL in a browser is optional. Production can distribute ordinary static documentation separately, but it runs no Astro dev server or development documentation port.
 
-  # 3. Python FastAPI AI Engine
-  ai_service:
-    build:
-      context: ./Inference
-      dockerfile: Dockerfile
-    container_name: proctoring_ai
-    environment:
-      - CORE_API_URL=http://api:8080/api/violations
-      - AI_API_KEY=${AiService__ApiKey}
-      - API_URL=http://api:8080/api
-      - JWT__KEY=${JWT__KEY}
-      - INFERENCE_IMAGES_PATH=/app/images
-    volumes:
-      - shared_images:/app/images
-      - deepface_cache:/root/.deepface
-    networks:
-      - app_network
-    restart: unless-stopped
-    depends_on:
-      - api
+Qt runs natively for real camera, microphone, screen and OS access. The development launcher selects its DEV build and development origin. A missing client produces a build command instead of launching a stale production installer.
 
-  # 4. Reverse Proxy, Angular Monitor & Student Landing
-  nginx:
-    build:
-      context: ./monitor
-      dockerfile: Dockerfile
-      args:
-        BACKEND_URL: ${BACKEND_URL:-http://localhost}
-    container_name: proctoring_nginx
-    ports:
-      - "${NGINX_PORT:-80}:80"
-    volumes:
-      - ./monitor/nginx.conf:/etc/nginx/conf.d/default.conf
-      - ./Landing:/usr/share/nginx/html/landing
-    networks:
-      - app_network
-    depends_on:
-      - api
+## 9.4 Production boundary and network routing
 
-volumes:
-  postgres_data:
-  shared_images:
-  deepface_cache:
+Nginx exposes the configured HTTPS origin and routes `/api/` to Core and `/verify/` and `/analyze/` to AI. Qt uploads frames/audio through this origin. AI validates active attempts with Core and delivers observations through its durable outbox. PostgreSQL and AI have no public direct port. Refresh cookies are secure in production.
 
-networks:
-  app_network:
-    driver: bridge
-```
+Core and AI use the same implementation in both profiles and expose no development admission routes. The Qt production package contains no override QML, registration or shortcut handler. Environment variables, QSettings and CLI flags cannot activate code that is absent from the artifact. Both client builds require the ordinary identity admission.
 
----
+Production uses reviewed build manifests and matching installers. The portal distributes the production client; the same portal serves the DEV installer in development through an environment-specific file mount. Neither installer is treated as current merely because an older binary exists in the portal directory.
 
-## 9.3 Environment Variables Reference (`.env`)
+## 9.5 Persistence, backup and retention
 
-| Variable Name | Default Value | Description |
-| :--- | :--- | :--- |
-| `DB_NAME` | `ExamGuardianDB` | PostgreSQL database name |
-| `DB_USER` | `postgres` | Database administrator username |
-| `DB_PASSWORD` | `[secure-random-secret]` | Database password |
-| `JWT__KEY` | `[256-bit-hmac-key]` | Symmetric key used for signing JWT authentication tokens |
-| `JWT__ISSUER` | `OnlineProctoringAPI` | Issuer claim in JWT tokens |
-| `JWT__AUDIENCE` | `OnlineProctoringClients` | Audience claim in JWT tokens |
-| `AiService__ApiKey`| `[hex-secret-token]` | Shared secret key for internal AI webhook authentication |
-| `BACKEND_URL` | `http://localhost` | Public domain or IP address of the deployment host |
-| `NGINX_PORT` | `80` | External HTTP ingress port |
+PostgreSQL stores accounts, exam snapshots, answers, outcomes and review history. Camera/screen files and their timing/hash sidecars use media storage. AI previews, reference snapshots and event images use shared image storage; its durable outbox and challenge state use SQLite. Each environment owns its storage.
 
----
+A checkpoint includes PostgreSQL, media and online SQLite snapshots with checksums. Restore verifies integrity and creates an isolated target; switching the working deployment is a separate operation. Retention remains disabled until an administrator configures a period, previews the plan and applies it. Only old finished/reviewed attempts qualify; media expiration preserves answers, scores and decision history.
 
-## 9.4 Nginx Reverse Proxy Routing Configuration
+## 9.6 Verifying environment isolation
 
-The edge reverse proxy (`monitor/nginx.conf`) manages path-based routing:
+Verification exercises concurrent launch and independent stop, persistence after restart, distinct keys/databases/queues, and absence of synthetic admission routes in both profiles. Artifact checks confirm absent development resources and are supplemented by direct runtime requests. A client banner or hidden button is not the production security boundary.
 
-```nginx
-server {
-    listen 80;
-    server_name localhost;
-    client_max_body_size 50M;
+The verified state of the checkout remains documented separately in [Current implementation and validation](/docs/11-current-contract).
 
-    # 1. Core API REST Endpoints
-    location /api/ {
-        proxy_pass http://api:8080/api/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # 2. SignalR WebSockets (Real-time monitor alerts)
-    location /hubs/ {
-        proxy_pass http://api:8080/hubs/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # 3. Student Portal (Static Landing & Client Downloads)
-    location /landing/ {
-        alias /usr/share/nginx/html/landing/;
-        index index.html;
-        try_files $uri $uri/ /landing/index.html;
-    }
-
-    # 4. Examiner Monitor Panel (Angular SPA)
-    location / {
-        root /usr/share/nginx/html;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
----
-
-## 9.5 Production Hardening Checklist
-
-1. **TLS / SSL Certificate:** Install Let's Encrypt using Certbot or place institution-issued SSL certificates in Nginx, redirecting port 80 to 443 with HTTP Strict Transport Security (HSTS).
-2. **Firewall Rules (`UFW`):** Only allow inbound ports `80`, `443`, and `SSH (22)`. Ensure database port `5432` and internal API ports `8080`, `8000` are strictly bound to Docker's internal bridge network and never exposed to the public internet.
-3. **Database Automated Backups:** Configure a daily cron task executing `pg_dump` into compressed off-site storage:
-   ```bash
-   docker exec -t proctoring_db pg_dump -U postgres ExamGuardianDB | gzip > /backups/db_$(date +%F).sql.gz
-   ```
+The landing HTML, styles and content are shared from `Landing/`. The development profile changes only the installer served at the normal download URL. No custom DEV landing page is maintained.

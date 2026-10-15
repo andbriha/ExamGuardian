@@ -16,16 +16,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install PyTorch CPU first to avoid downloading 3GB of CUDA libraries
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir torch==2.14.1+cpu torchvision==0.29.1+cpu --index-url https://download.pytorch.org/whl/cpu
 
 # Copy only the requirements file first to leverage Docker layer caching
-COPY requirements.txt .
+COPY requirements.txt requirements.lock ./
 
 # Install Python dependencies without caching to keep the image small
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.lock
 
 # Copy the rest of the inference source code
 COPY . .
+RUN python download_speech_model.py
 
 # Expose the port that FastAPI will listen on
 EXPOSE 8000

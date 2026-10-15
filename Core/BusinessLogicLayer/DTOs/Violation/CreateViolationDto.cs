@@ -1,8 +1,9 @@
-﻿namespace BusinessLayer.DTOs.Violation
+namespace BusinessLayer.DTOs.Violation
 {
     public class CreateViolationDto
     {
         public int ExamSessionId { get; set; }
+        public Guid EventId { get; set; }
         public string ViolationType { get; set; } = null!;
         public double Confidence { get; set; }
         public int RelativeTimestampSeconds { get; set; }

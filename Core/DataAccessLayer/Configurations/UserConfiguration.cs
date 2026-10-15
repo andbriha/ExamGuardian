@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using DataAccessLayer.Entities;
 
@@ -9,6 +9,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
     public void Configure(EntityTypeBuilder<User> builder)
     {
         builder.HasKey(u => u.Id);
+        builder.HasIndex(u => u.Login).IsUnique();
 
         builder.Property(u => u.Login).HasMaxLength(100).IsRequired();
         builder.Property(u => u.Role).HasMaxLength(50).IsRequired();
@@ -27,6 +28,6 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasMany(u => u.Sessions)
                .WithOne(s => s.Student)
                .HasForeignKey(s => s.StudentId)
-               .OnDelete(DeleteBehavior.Cascade);
+               .OnDelete(DeleteBehavior.Restrict);
     }
 }

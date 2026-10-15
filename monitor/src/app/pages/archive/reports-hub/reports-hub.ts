@@ -1,3 +1,4 @@
+import { RouterModule } from '@angular/router';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
@@ -11,16 +12,21 @@ export interface CompletedExamView {
   date: string;
   violationsCount: number;
   avgScore: number;
+  scoreCalculated?: boolean;
   studentName?: string;
-  status: 'passed' | 'failed' | 'aborted';
+  status: 'passed' | 'failed' | 'aborted' | 'unknown';
   statusText: string;
   durationSec: number;
+  examId?: number;
+  integrityVerdict?: string;
+  integrityNotes?: string;
+  evidenceStatus?: string;
 }
 
 @Component({
   selector: 'app-reports-hub',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   templateUrl: './reports-hub.html',
   styleUrl: './reports-hub.css'
 })
@@ -56,38 +62,14 @@ export class ReportsHubComponent implements OnInit {
           }
         });
       },
-      error: () => {
-        // Fallback: load exams if sessions endpoint returns empty
-        this.examService.getAll().subscribe({
-          next: (exams) => {
-            this.completedExams = exams.map(e => ({
-              id: e.id.toString(),
-              title: e.title,
-              groupName: e.description || 'Основна група',
-              date: new Date().toLocaleDateString('uk-UA'),
-              violationsCount: 0,
-              avgScore: 0,
-              studentName: 'Загальний звіт',
-              status: 'aborted',
-              statusText: 'Немає сесій',
-              durationSec: 0
-            }));
-            this.isLoading = false;
-            this.cdr.detectChanges();
-          },
-          error: (err) => {
-            this.isLoading = false;
-            this.errorMessage = 'Не вдалося завантажити архів звітів: ' + (err.error?.message ?? err.message);
-            this.cdr.detectChanges();
-          }
-        });
-      }
+      error: () => { this.completedExams = []; this.isLoading = false; this.errorMessage = 'Не вдалося отримати архів сесій. Спробуйте повторно.'; this.cdr.detectChanges(); }
+
     });
   }
 
   private buildViews(sessions: ExamSessionDto[], exams: ExamDto[]) {
     if (sessions && sessions.length > 0) {
-      this.completedExams = sessions.map(s => {
+      this.completedExams = sessions.filter(s => s.isFinished).map(s => {
         let durationSec = 0;
         if (s.startTime && s.endTime) {
           durationSec = Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 1000);
@@ -96,7 +78,7 @@ export class ReportsHubComponent implements OnInit {
         const isFinished = s.isFinished === true;
         const score = s.score ?? 0;
 
-        let status: 'passed' | 'failed' | 'aborted' = 'aborted';
+        let status: 'passed' | 'failed' | 'aborted' | 'unknown' = 'aborted';
         let statusText = 'Перервано / Не пройдено';
 
         // Валідація: якщо сесія тривала менше 20 сек і бал 0 (студент вилетів на камері чи технічній перевірці),
@@ -104,15 +86,17 @@ export class ReportsHubComponent implements OnInit {
         if (!isFinished) {
           status = 'aborted';
           statusText = 'Перервано (сесія не завершена)';
-        } else if (durationSec < 20 && score === 0) {
+        } else if (s.status === "TerminatedByProctor") {
           status = 'aborted';
-          statusText = 'Не пройдено (збій камери / перервано)';
-        } else if (score >= 60) {
+          statusText = 'Припинено викладачем';
+        } else if (s.scoreCalculated === false) {
+          status = "unknown"; statusText="Історичний бал потребує перевірки";
+        } else if (score >= (s.passingScoreAtStart ?? 60)) {
           status = 'passed';
-          statusText = 'Складено успішно';
+          statusText = 'Порог бала досягнуто';
         } else {
           status = 'failed';
-          statusText = 'Не складено (недостатній бал)';
+          statusText = 'Порог бала не досягнуто';
         }
 
         return {
@@ -121,11 +105,11 @@ export class ReportsHubComponent implements OnInit {
           groupName: s.studentName ? `Студент: ${s.studentName}` : 'Сесія тестування',
           date: s.startTime ? new Date(s.startTime).toLocaleDateString('uk-UA') : new Date().toLocaleDateString('uk-UA'),
           violationsCount: s.violationCount,
-          avgScore: score,
+          avgScore: score, scoreCalculated: s.scoreCalculated,
           studentName: s.studentName,
           status,
           statusText,
-          durationSec
+          durationSec, examId: s.examId, integrityVerdict: s.integrityVerdict, integrityNotes: s.integrityNotes, evidenceStatus: s.evidenceStatus
         };
       });
     } else {
@@ -133,9 +117,16 @@ export class ReportsHubComponent implements OnInit {
     }
   }
 
+  reviewReport(id: string, verdict: string): void {
+    const notes=prompt('Підстава висновку для протоколу та апеляції:');
+    if (!notes?.trim()) return;
+    this.sessionService.review(Number(id),verdict,notes).subscribe({next: () => this.loadReports(),error: e => { this.errorMessage = e.error?.message || 'Висновок не збережено.'; this.cdr.detectChanges(); }});
+  }
+  verdictLabel(verdict?: string): string { return ({UnderReview:'Очікує висновку',Accepted:'Перевірено: прийнято',Rejected:'Добросовісність не підтверджено',Inconclusive:'Недостатньо доказів'} as Record<string,string>)[verdict || 'UnderReview'] || 'Очікує висновку'; }
   downloadReport = (id: string) => {
     const report = this.completedExams.find(r => r.id === id);
-    const title = report ? report.title : `Іспит #${id}`;
+    const escapeHtml = (v: string) => v.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+    const title = escapeHtml(report ? report.title : `Іспит #${id}`);
     const student = report?.studentName ? `Учасник: ${report.studentName}\n` : '';
     const score = report ? `Бал: ${report.avgScore}/100\n` : '';
     const violations = report ? `Зафіксовано порушень ШІ: ${report.violationsCount}\n` : '';
@@ -151,7 +142,7 @@ export class ReportsHubComponent implements OnInit {
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Офіційний звіт Online Proctoring System - ${title}</title>
+          <title>Звіт про спробу ExamGuardian - ${title}</title>
           <style>
             body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #1e293b; }
             h1 { color: #1a56db; margin-bottom: 8px; }
@@ -173,22 +164,25 @@ export class ReportsHubComponent implements OnInit {
           <div class="card">
             <div class="row"><span class="label">Назва дисципліни / іспиту:</span><span>${title}</span></div>
             <div class="row"><span class="label">Ідентифікатор сесії:</span><span>#OPS-${id}</span></div>
-            <div class="row"><span class="label">Студент:</span><span>${report?.studentName || 'Не вказано'}</span></div>
+            <div class="row"><span class="label">Студент:</span><span>${escapeHtml(report?.studentName || 'Не вказано')}</span></div>
             <div class="row"><span class="label">Дата:</span><span>${report?.date || new Date().toLocaleDateString('uk-UA')}</span></div>
             <div class="row"><span class="label">Тривалість сесії:</span><span>${report?.durationSec ?? 0} сек</span></div>
-            <div class="row"><span class="label">Результат тестування:</span><span><strong>${report?.avgScore ?? 0} / 100</strong></span></div>
+            <div class="row"><span class="label">Результат тестування:</span><span><strong>${report?.scoreCalculated === false ? "Не розраховано" : (report?.avgScore ?? 0) + " / 100"}</strong></span></div>
             <div class="row"><span class="label">Підсумок проходження:</span>
               <span class="badge ${statusBadgeClass}">
-                ${report?.statusText}
+                ${escapeHtml(report?.statusText || "")}
               </span>
             </div>
-            <div class="row"><span class="label">Порушень прокторингу (ШІ / Процеси):</span>
+            <div class="row"><span class="label">Спостережень для перевірки:</span>
               <span class="badge ${(report?.violationsCount ?? 0) > 0 ? 'badge-warn' : 'badge-ok'}">
                 ${report?.violationsCount ?? 0} зафіксовано
               </span>
             </div>
+            <div class="row"><span class="label">Висновок прокторингу:</span><span>${escapeHtml(this.verdictLabel(report?.integrityVerdict))}</span></div>
+            <div class="row"><span class="label">Підстава висновку:</span><span>${escapeHtml(report?.integrityNotes || 'Висновок ще не надано')}</span></div>
+            <div class="row"><span class="label">Доставка доказів:</span><span>${escapeHtml(report?.evidenceStatus || 'Unknown')}</span></div>
             <div class="row"><span class="label">Статус валідації:</span>
-              <span>${isAborted ? 'Не зараховано (сесія перервана або не пройдена)' : (report?.violationsCount ?? 0) === 0 ? 'Успішно підтверджено без порушень' : 'Потребує повторного перегляду екзаменатором'}</span>
+              <span>${isAborted ? 'Не зараховано (сесія перервана або не пройдена)' : (report?.violationsCount ?? 0) === 0 ? 'Автоматичних сигналів немає. Повнота моніторингу та висновок потребують перевірки' : 'Потребує повторного перегляду екзаменатором'}</span>
             </div>
           </div>
           <button onclick="window.print()" style="padding: 10px 20px; background: #1a56db; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px;">🖨️ Друк / Зберегти як PDF</button>

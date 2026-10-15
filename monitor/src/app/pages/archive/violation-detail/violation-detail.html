@@ -60,6 +60,7 @@
               <video #videoPlayer
                      [src]="currentVideoUrl"
                      (loadedmetadata)="onMetadataLoaded()"
+                     (error)="onVideoError()"
                      (timeupdate)="onTimeUpdate()"
                      (play)="isPlaying = true"
                      (pause)="isPlaying = false"
@@ -70,7 +71,7 @@
               <!-- Active Violation Overlay on Video -->
               <div class="video-overlay" *ngIf="activeMarker">
                 <div class="video-overlay-dot"></div>
-                <span>{{ getViolationLabel(activeMarker.violationType) }} &bull; {{ Math.round(activeMarker.confidence * 100) }}% AI</span>
+                <span>{{ getViolationLabel(activeMarker.violationType) }} &bull; {{ confidenceLabel(activeMarker) }}</span>
               </div>
 
               <div class="video-timestamp">
@@ -166,10 +167,10 @@
                         }
                       </td>
                       <td>
-                        <span class="conf-badge">{{ Math.round(v.confidence * 100) }}%</span>
+                        <span class="conf-badge">{{ confidenceLabel(v) }}</span>
                       </td>
                       <td>
-                        Чанк #{{ Math.floor(v.relativeTimestampSeconds / 60) + 1 }}
+                        {{ formatTime(v.relativeTimestampSeconds) }} від початку сесії
                       </td>
                       <td>
                         <button class="btn-jump" (click)="seekToViolation(v)">
@@ -229,9 +230,9 @@
           <span class="badge-danger">#{{ currentViolation.id }}</span>
         </div>
         <div class="card-body">
-          <div class="confidence-bar">
+          <div class="confidence-bar" *ngIf="currentViolation && ['cell_phone','book','laptop'].includes(currentViolation.violationType)">
             <div class="conf-label">
-              <span>Впевненість нейромережі</span>
+              <span>Оцінка детектора (не доказ порушення)</span>
               <span class="conf-val">{{ Math.round(currentViolation.confidence * 100) }}%</span>
             </div>
             <div class="conf-track">
@@ -239,10 +240,19 @@
             </div>
           </div>
   
+          <label>Підстава рішення<textarea #notes maxlength="2000" (input)="reviewNotes = notes.value" placeholder="Пояснення для протоколу"></textarea></label>
+          <p *ngIf="reviewError" role="alert">{{ reviewError }}</p>
+          <section *ngIf="currentViolation.violationType === 'voice_activity'">
+            <p>Виявлено мовлення. Особу мовця не встановлено. Це не доказ підказки: прослухайте запис у контексті та обґрунтуйте рішення.</p>
+            <p *ngIf="speechTranscript">Автоматична розшифровка (можливі помилки): «{{ speechTranscript }}»</p>
+            <p *ngIf="!speechTranscript">Розшифровка недоступна. Перевірте оригінальний звук запису.</p>
+          </section>
+          <p>Рішення: {{ currentViolation.reviewDecision }}</p>
+          <img *ngIf="evidenceImageUrl" [src]="evidenceImageUrl" alt="Кадр, за яким сформовано сигнал" style="max-width:100%">
+          <p *ngIf="evidenceError" role="alert">{{ evidenceError }}</p>
           <div class="action-btns">
-            <button class="btn btn-danger" (click)="confirmViolation()">Підтвердити порушення</button>
-            <button class="btn btn-warn" (click)="sendWarning()">Надіслати попередження</button>
-            <button class="btn btn-ghost" (click)="rejectViolation()">Відхилити (хибне спрацювання)</button>
+            <button class="btn btn-danger" [disabled]="reviewing" (click)="confirmViolation()">Підтвердити порушення</button>
+            <button class="btn btn-ghost" [disabled]="reviewing" (click)="rejectViolation()">Відхилити (хибне спрацювання)</button>
           </div>
         </div>
       </div>

@@ -1,3 +1,6 @@
+#ifdef EXAMGUARDIAN_DEVELOPMENT
+#include "development_viewmodel.h"
+#endif
 #include "process_viewmodel.h"
 #include <QDebug>
 
@@ -12,6 +15,7 @@ void ProcessViewModel::runFullScan() {
     m_suspiciousApps   = m_scanner.getSuspiciousProcesses();
     m_spoofedProcesses = m_scanner.getSpoofedProcesses();
     m_isVmDetected     = m_envDetector.isVirtualMachine();
+    m_virtualizationBlocked = m_isVmDetected;
     m_vmDetails        = m_envDetector.getVmDetails();
     m_virtualCameras   = m_envDetector.getVirtualCameras();
     m_multipleMonitors = m_envDetector.hasMultipleMonitors();
@@ -24,6 +28,13 @@ void ProcessViewModel::runFullScan() {
                m_virtualCameras.isEmpty() &&
                !m_multipleMonitors;
 
+#ifdef EXAMGUARDIAN_DEVELOPMENT
+    if(auto *dev=DevelopmentViewModel::current) {
+        m_virtualizationBlocked = m_isVmDetected && !dev->bypass("vmGate");
+        m_isSafe=(dev->bypass("processGate") || (m_suspiciousApps.isEmpty()&&m_spoofedProcesses.isEmpty())) &&
+            (dev->bypass("vmGate") || !m_isVmDetected) && (dev->bypass("virtualDeviceGate") || m_virtualCameras.isEmpty()) && (dev->bypass("displayGate") || !m_multipleMonitors);
+    }
+#endif
     qDebug() << "[ProcessViewModel] Full environment scan completed."
              << "Safe:" << m_isSafe
              << "Suspicious apps:" << m_suspiciousApps.size()

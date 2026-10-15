@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Globalization;
+using Microsoft.Extensions.Configuration;
 using BusinessLayer.DTOs.Exam;
 using BusinessLayer.Interfaces;
 using DataAccessLayer.Entities;
@@ -8,10 +11,12 @@ namespace BusinessLogicLayer.Services;
 public class ExamService : IExamService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IConfiguration _config;
 
-    public ExamService(IUnitOfWork unitOfWork)
+    public ExamService(IUnitOfWork unitOfWork, IConfiguration config)
     {
         _unitOfWork = unitOfWork;
+        _config = config;
     }
 
     public async Task<ExamDto?> GetByIdAsync(int id)
@@ -37,17 +42,35 @@ public class ExamService : IExamService
 
     public async Task<ExamDto> CreateAsync(CreateExamDto dto)
     {
+        if (string.IsNullOrWhiteSpace(dto.Title) || dto.DurationMinutes is < 1 or > 480 || dto.Questions.Count == 0 || dto.Questions.Count > 500 || dto.MaxAttempts is < 1 or > 10 || dto.PassingScore is < 0 or > 100)
+            throw new ArgumentException("Title, duration and at least one question are required.");
+        if (dto.Questions.Any(q => string.IsNullOrWhiteSpace(q.Text) || q.Points < 1 || q.Points > 1000 || q.Options.Count < 2 || q.Options.Count > 10 || q.Options.Any(string.IsNullOrWhiteSpace) || q.CorrectIndex < 0 || q.CorrectIndex >= q.Options.Count))
+            throw new ArgumentException("Invalid question, points or correct option.");
+        if (dto.AllowedObjects.Any(o => o is not ("book" or "laptop" or "cell_phone"))) throw new ArgumentException("Invalid allowed object type.");
+        if (dto.ScheduledStartTime?.Kind == DateTimeKind.Unspecified) throw new ArgumentException("Scheduled time must include a UTC or timezone offset.");
+        DateTime? scheduled = dto.ScheduledStartTime?.ToUniversalTime();
+        if (!string.IsNullOrWhiteSpace(dto.ScheduledStartLocal)) {
+            if (dto.ScheduledStartTime is not null) throw new ArgumentException("Use either local time with a timezone or an explicit UTC timestamp.");
+            if (!DateTime.TryParseExact(dto.ScheduledStartLocal, new[]{"yyyy-MM-ddTHH:mm","yyyy-MM-ddTHH:mm:ss"}, CultureInfo.InvariantCulture, DateTimeStyles.None, out var local)) throw new ArgumentException("Invalid scheduled local time.");
+            TimeZoneInfo zone;
+            try { zone=TimeZoneInfo.FindSystemTimeZoneById(dto.TimeZoneId ?? _config["Exam:TimeZone"] ?? "Europe/Chisinau"); }
+            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { throw new ArgumentException("Unknown exam timezone."); }
+            local=DateTime.SpecifyKind(local,DateTimeKind.Unspecified);
+            if(zone.IsInvalidTime(local) || zone.IsAmbiguousTime(local)) throw new ArgumentException("This local time is missing or ambiguous because of daylight saving. Choose another time or send an explicit UTC timestamp.");
+            scheduled=TimeZoneInfo.ConvertTimeToUtc(local,zone);
+        }
+        var now=DateTime.UtcNow;
         var repo = (IExamRepository)_unitOfWork.Repository<Exam>();
 
         var exam = new Exam
         {
             Title = dto.Title,
             Description = dto.Description,
-            RawContent = string.Empty,
+            RawContent = string.Empty, AllowSpeech = dto.AllowSpeech, FlagHeadMovement = dto.FlagHeadMovement, AllowedObjectsJson = JsonSerializer.Serialize(dto.AllowedObjects.Distinct()),
             CreatorId = dto.CreatorId,
-            CreatedAt = DateTime.UtcNow,
-            ScheduledStartTime = dto.ScheduledStartTime,
-            DurationMinutes = dto.DurationMinutes,
+            CreatedAt = now,
+            ScheduledStartTime = scheduled ?? now,
+            DurationMinutes = dto.DurationMinutes, AllowedGroup = string.IsNullOrWhiteSpace(dto.AllowedGroup) ? null : dto.AllowedGroup.Trim(), MaxAttempts = dto.MaxAttempts, PassingScore = dto.PassingScore,
 
             Questions = dto.Questions.Select((q, i) => new Question
             {
@@ -81,8 +104,8 @@ public class ExamService : IExamService
     public async Task<IEnumerable<ExamDto>> GetAvailableAsync()
     {
         var repo = (IExamRepository)_unitOfWork.Repository<Exam>();
-        var exams = await repo.GetAllAsync();
-        return exams.Select(MapToDto);
+        var exams = await repo.GetCatalogAsync();
+        return exams.Select(e => { var dto = MapToDto(e); dto.Questions.Clear(); return dto; });
     }
 
     public async Task<ExamDto?> GetForStudentAsync(int id)
@@ -114,15 +137,19 @@ public class ExamService : IExamService
 
         return score;
     }
-    private static ExamDto MapToDto(Exam e) => new()
+    private ExamDto MapToDto(Exam e) => new()
     {
         Id = e.Id,
         Title = e.Title,
         Description = e.Description,
-        RawContent = e.RawContent,
+        RawContent = e.RawContent, AllowSpeech = e.AllowSpeech, FlagHeadMovement = e.FlagHeadMovement, AllowedObjects = JsonSerializer.Deserialize<List<string>>(e.AllowedObjectsJson) ?? new(),
         CreatedAt = e.CreatedAt,
-        ScheduledStartTime = e.ScheduledStartTime,
-        DurationMinutes = e.DurationMinutes,
+        ScheduledStartTime = e.ScheduledStartTime ?? e.CreatedAt,
+        ScheduledEndTime = (e.ScheduledStartTime ?? e.CreatedAt).AddMinutes(e.DurationMinutes),
+        ServerTimeUtc = DateTime.UtcNow,
+        TimeZoneId = _config["Exam:TimeZone"] ?? "Europe/Chisinau",
+        QuestionCount = e.Questions.Count,
+        DurationMinutes = e.DurationMinutes, AllowedGroup = e.AllowedGroup, MaxAttempts = e.MaxAttempts, PassingScore = e.PassingScore,
         CreatorId = e.CreatorId,
 
         // Додаємо мапінг питань, якщо вони підвантажені з бази

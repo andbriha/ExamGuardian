@@ -1,0 +1,18 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Core.Controllers;
+
+[ApiController, Route("api/system"), Authorize]
+public class SystemController(IConfiguration config,IWebHostEnvironment env) : ControllerBase
+{
+    [HttpGet("capabilities")]
+    public IActionResult Capabilities()
+    {
+        _ = config;
+        const string flavor="shared";
+        var enabled=false;
+        var allowed=Array.Empty<string>();
+        return Ok(new {buildId=typeof(SystemController).Assembly.GetName().Version?.ToString(),environment=env.EnvironmentName,buildFlavor=flavor,protocolVersion=4,developmentToolsAvailable=enabled,allowedOverrides=allowed});
+    }
+}

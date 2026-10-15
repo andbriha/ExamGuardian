@@ -6,6 +6,7 @@
 
 AuthService::AuthService(QObject *parent) : QObject(parent) {
     m_manager = new QNetworkAccessManager(this);
+    m_manager->setTransferTimeout(15000);
 }
 
 void AuthService::login(const QString &login, const QString &password, const QString &baseUrl) {
@@ -35,10 +36,12 @@ void AuthService::login(const QString &login, const QString &password, const QSt
         }
 
         QJsonObject resp = root["response"].toObject();
+        if (resp["protocolVersion"].toInt() < 4) { emit loginFailed("Версія сервера несумісна. Оновіть API та AI разом із клієнтом."); reply->deleteLater(); return; }
         UserCredentials creds;
         creds.accessToken = resp["accessToken"].toString();
         creds.login       = resp["login"].toString();
         creds.role        = resp["role"].toString();
+        creds.expiresAt = QDateTime::fromString(resp["expiresAt"].toString(),Qt::ISODateWithMs);
 
         emit loginSucceeded(creds);
         reply->deleteLater();
@@ -49,8 +52,7 @@ void AuthService::refresh(const QString &baseUrl) {
     QNetworkRequest request(QUrl(baseUrl + "/api/Auth/refresh"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    // refresh token береться з HttpOnly cookie — браузер відправляє автоматично
-    // Qt не зберігає cookies за замовчуванням, тому треба QNetworkCookieJar
+    // The same QNetworkAccessManager retains the HttpOnly refresh cookie.
     QNetworkReply *reply = m_manager->post(request, QByteArray());
 
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
@@ -70,10 +72,12 @@ void AuthService::refresh(const QString &baseUrl) {
         }
 
         QJsonObject resp = root["response"].toObject();
+        if (resp["protocolVersion"].toInt() < 4) { emit loginFailed("Версія сервера несумісна. Оновіть API та AI разом із клієнтом."); reply->deleteLater(); return; }
         UserCredentials creds;
         creds.accessToken = resp["accessToken"].toString();
         creds.login       = resp["login"].toString();
         creds.role        = resp["role"].toString();
+        creds.expiresAt = QDateTime::fromString(resp["expiresAt"].toString(),Qt::ISODateWithMs);
 
         emit loginSucceeded(creds);
         reply->deleteLater();

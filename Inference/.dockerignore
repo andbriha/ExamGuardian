@@ -1,6 +1,9 @@
-.venv
 venv
+.venv
 __pycache__
-*.pyc
-.git
+**/__pycache__
+state
 images
+evaluation-results
+.git
+*.log

@@ -161,6 +161,13 @@ QVariantList ProcessScanner::buildProcessSnapshot() {
         } while (Process32NextW(hSnapshot, &pe));
     }
     CloseHandle(hSnapshot);
+#elif defined(Q_OS_LINUX)
+    for (const auto &pid : QDir("/proc").entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        bool numeric = false; pid.toUInt(&numeric); if (!numeric) continue;
+        const auto path = QFileInfo("/proc/" + pid + "/exe").symLinkTarget();
+        if (path.isEmpty()) continue;
+        processes.append(QVariantMap{{"name", QFileInfo(path).fileName()}, {"path", path}, {"hash", calculateFileHash(path)}});
+    }
 #endif
 
     return processes;
@@ -186,6 +193,19 @@ bool ProcessScanner::saveSnapshotToFile(const QVariantList &snapshot) {
 
 QStringList ProcessScanner::getSuspiciousProcesses() {
     QStringList foundApps;
+#ifdef Q_OS_LINUX
+    const QStringList blocked = {"discord", "telegram-desktop", "telegram", "anydesk", "teamviewer", "obs", "obs-studio", "rustdesk", "zoom", "slack", "skype", "vncviewer", "wireshark"};
+    for (const auto &pid : QDir("/proc").entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+        bool numeric = false; pid.toUInt(&numeric); if (!numeric) continue;
+        QFile nameFile("/proc/" + pid + "/comm");
+        if (!nameFile.open(QIODevice::ReadOnly)) continue;
+        const auto name = QString::fromUtf8(nameFile.readAll()).trimmed().toLower();
+        const auto executable = QFileInfo("/proc/" + pid + "/exe").symLinkTarget();
+        if (blocked.contains(name) || blocked.contains(QFileInfo(executable).fileName().toLower())) {
+            if (!foundApps.contains(name)) foundApps.append(name);
+        }
+    }
+#endif
 
 #ifdef Q_OS_WIN
     QStringList blacklistNames = {

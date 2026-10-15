@@ -16,7 +16,7 @@ COPY . .
 ARG BACKEND_URL=http://localhost:5111/api
 
 # Inject the dynamic API URL into the Angular environment configuration file
-RUN sed -i "s|apiUrl: '.*'|apiUrl: '${BACKEND_URL}'|g" ./src/environments/environment.ts
+RUN sed -i "s|apiUrl: '.*'|apiUrl: '/api'|g" ./src/environments/environment.ts
 
 # Build the Angular application for production
 RUN npm run build -- --configuration production

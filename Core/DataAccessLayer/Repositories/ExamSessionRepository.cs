@@ -28,6 +28,8 @@ public class ExamSessionRepository : GenericRepository<ExamSession>, IExamSessio
     public async Task<IEnumerable<ExamSession>> GetByStudentAsync(Guid studentId) =>
         await _dbSet
             .Include(es => es.Exam)
+            .Include(es => es.Student)
+            .Include(es => es.Violations)
             .Where(es => es.StudentId == studentId)
             .OrderByDescending(es => es.StartTime)
             .ToListAsync();
@@ -35,12 +37,15 @@ public class ExamSessionRepository : GenericRepository<ExamSession>, IExamSessio
     public async Task<IEnumerable<ExamSession>> GetByExamAsync(int examId) =>
         await _dbSet
             .Include(es => es.Student)
+            .Include(es => es.Exam)
+            .Include(es => es.Violations)
             .Where(es => es.ExamId == examId)
             .OrderByDescending(es => es.StartTime)
             .ToListAsync();
 
     public async Task<ExamSession?> GetActiveSessionAsync(Guid studentId, int examId) =>
         await _dbSet
+            .Include(es => es.Exam).Include(es => es.Student).Include(es => es.Violations)
             .FirstOrDefaultAsync(es =>
                 es.StudentId == studentId &&
                 es.ExamId == examId &&

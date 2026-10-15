@@ -12,6 +12,7 @@ class ProcessViewModel : public QObject {
     Q_PROPERTY(bool isEnvironmentSafe READ isEnvironmentSafe NOTIFY scanCompleted)
     Q_PROPERTY(QStringList suspiciousApps READ suspiciousApps NOTIFY scanCompleted)
     Q_PROPERTY(QStringList spoofedProcesses READ spoofedProcesses NOTIFY scanCompleted)
+    Q_PROPERTY(bool virtualizationBlocked READ virtualizationBlocked NOTIFY scanCompleted)
     Q_PROPERTY(bool isVmDetected READ isVmDetected NOTIFY scanCompleted)
     Q_PROPERTY(QString vmDetails READ vmDetails NOTIFY scanCompleted)
     Q_PROPERTY(QStringList virtualCameras READ virtualCameras NOTIFY scanCompleted)
@@ -30,6 +31,7 @@ public:
     bool isEnvironmentSafe() const { return m_isSafe; }
     QStringList suspiciousApps() const { return m_suspiciousApps; }
     QStringList spoofedProcesses() const { return m_spoofedProcesses; }
+    bool virtualizationBlocked() const { return m_virtualizationBlocked; }
     bool isVmDetected() const { return m_isVmDetected; }
     QString vmDetails() const { return m_vmDetails; }
     QStringList virtualCameras() const { return m_virtualCameras; }
@@ -50,6 +52,7 @@ private:
     QStringList m_suspiciousApps;
     QStringList m_spoofedProcesses;
     bool        m_isVmDetected = false;
+    bool        m_virtualizationBlocked = true;
     QString     m_vmDetails;
     QStringList m_virtualCameras;
     bool        m_multipleMonitors = false;

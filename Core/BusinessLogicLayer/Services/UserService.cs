@@ -34,7 +34,9 @@ public class UserService : IUserService
 
     public async Task<UserDto> CreateAsync(CreateUserDto dto)
     {
-        var existing = await _users.GetByLoginAsync(dto.Login);
+        if (string.IsNullOrWhiteSpace(dto.FullName) || dto.FullName.Length > 150 || string.IsNullOrWhiteSpace(dto.Login) || !System.Text.RegularExpressions.Regex.IsMatch(dto.Login ?? "", @"^[a-zA-Z0-9._-]{3,100}$") || string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Length < 12)
+            throw new InvalidOperationException("Name, a safe login and password of at least 12 characters are required.");
+        var existing = await _users.GetByLoginAsync(dto.Login!);
         if (existing is not null)
             throw new InvalidOperationException(
                 $"Логін '{dto.Login}' вже зайнятий");
@@ -42,8 +44,8 @@ public class UserService : IUserService
         var user = new User
         {
             Id = Guid.NewGuid(),
-            FullName = dto.FullName,
-            Login = dto.Login,
+            FullName = dto.FullName.Trim(),
+            Login = dto.Login!,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             Role = dto.Role,
             Group = string.IsNullOrWhiteSpace(dto.Group) ? "Основна група" : dto.Group.Trim(),

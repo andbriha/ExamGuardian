@@ -1,5 +1,5 @@
 // exam-builder.component.ts
-import { Component } from '@angular/core';
+import { Component, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ExamService } from '../../../services/exam.service';
@@ -42,7 +42,9 @@ export class ExamBuilderComponent {
     title: '',
     description: '',
     startTime: '',
+    timeZoneId: 'Europe/Chisinau',
     durationMinutes: 60,
+    allowedGroup: '', maxAttempts: 1, passingScore: 60, allowSpeech: false, flagHeadMovement: true, allowBook: false, allowLaptop: false,
   };
 
   questions: Question[] = [];
@@ -50,7 +52,7 @@ export class ExamBuilderComponent {
   errorMsg = '';
   successMsg = '';
 
-  constructor(private examService: ExamService) {
+  constructor(private examService: ExamService, private cdr: ChangeDetectorRef) {
     this.addQuestion(); // починаємо з одного питання
   }
 
@@ -76,13 +78,14 @@ export class ExamBuilderComponent {
   removeOption(q: Question, i: number) {
     if (q.options.length > 2) {
       q.options.splice(i, 1);
+      if (i < q.correctIndex) q.correctIndex--;
       if (q.correctIndex >= q.options.length)
         q.correctIndex = q.options.length - 1;
     }
   }
 
   isValid(): boolean {
-    if (!this.exam.title.trim() || !this.exam.startTime) return false;
+    if (!this.exam.title.trim() || !this.exam.startTime || this.exam.durationMinutes < 1 || this.exam.durationMinutes > 480 || this.exam.maxAttempts < 1 || this.exam.maxAttempts > 10 || this.exam.passingScore < 0 || this.exam.passingScore > 100) return false;
     return this.questions.every(q =>
       q.text.trim() &&
       q.options.length >= 2 &&
@@ -107,8 +110,11 @@ export class ExamBuilderComponent {
     const payload = {
       title:           this.exam.title,
       description:     this.exam.description,
-      scheduledStartTime: this.exam.startTime ? new Date(this.exam.startTime).toISOString() : undefined,
+      scheduledStartLocal: this.exam.startTime || undefined,
+        timeZoneId: this.exam.timeZoneId,
       durationMinutes: this.exam.durationMinutes,
+      allowedGroup: this.exam.allowedGroup.trim() || undefined, maxAttempts: this.exam.maxAttempts, passingScore: this.exam.passingScore,
+      allowSpeech: this.exam.allowSpeech, flagHeadMovement: this.exam.flagHeadMovement, allowedObjects: [...(this.exam.allowBook ? ["book"] : []), ...(this.exam.allowLaptop ? ["laptop"] : [])],
       questions:       this.questions.map((q, i) => ({
         text:         q.text,
         points:       q.points,
@@ -122,11 +128,11 @@ export class ExamBuilderComponent {
       .subscribe({
         next: () => {
           this.successMsg = 'Іспит успішно створено';
-          this.saving = false;
+          this.saving = false; this.cdr.markForCheck();
         },
         error: (err) => {
           this.errorMsg = err.error?.message ?? 'Помилка сервера';
-          this.saving = false;
+          this.saving = false; this.cdr.markForCheck();
         },
       });
   }

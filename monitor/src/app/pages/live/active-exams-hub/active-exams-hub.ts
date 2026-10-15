@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { ExamService, ExamDto } from '../../../services/exam.service';
@@ -21,8 +21,9 @@ export interface ActiveExamView {
   templateUrl: './active-exams-hub.html',
   styleUrl: './active-exams-hub.css'
 })
-export class ActiveExamsHubComponent implements OnInit {
+export class ActiveExamsHubComponent implements OnInit, OnDestroy {
   activeExams: ActiveExamView[] = [];
+  private timer?: ReturnType<typeof setInterval>;
   isLoading = true;
   errorMessage = '';
 
@@ -34,10 +35,14 @@ export class ActiveExamsHubComponent implements OnInit {
 
   ngOnInit() {
     this.loadData();
+    this.timer=setInterval(()=>this.loadData(),10000);
   }
 
+  ngOnDestroy() { if(this.timer)clearInterval(this.timer); }
+
   loadData() {
-    this.isLoading = true;
+    this.errorMessage = '';
+    this.isLoading = this.activeExams.length === 0;
     this.examService.getAll().subscribe({
       next: (exams) => {
         this.sessionService.getAll().subscribe({
@@ -63,15 +68,19 @@ export class ActiveExamsHubComponent implements OnInit {
   }
 
   private buildExamViews(exams: ExamDto[], sessions: ExamSessionDto[]) {
-    this.activeExams = exams.map(e => {
+    this.activeExams = exams.filter(e => {
+      const now=e.serverTimeUtc ? Date.parse(e.serverTimeUtc) : Date.now();
+      const start=Date.parse(e.scheduledStartTime ?? e.createdAt ?? '');
+      return now>=start && now<start+e.durationMinutes*60000;
+    }).map(e => {
       const examSessions = sessions.filter(s => s.examId === e.id);
       const activeCount = examSessions.filter(s => !s.isFinished).length;
-      const totalCount = examSessions.length > 0 ? examSessions.length : 1;
+      const totalCount = examSessions.length;
 
       return {
         id: e.id.toString(),
         title: e.title,
-        groupName: e.description || 'Загальна група',
+        groupName: e.allowedGroup || 'Усі групи',
         activeStudents: activeCount,
         totalStudents: totalCount,
         startTime: `${e.durationMinutes} хв. тривалість`,

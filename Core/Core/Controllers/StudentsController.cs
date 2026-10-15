@@ -35,6 +35,7 @@ public class StudentsController : ControllerBase
     [Authorize(Roles = $"{SystemRoles.Examiner},{SystemRoles.Student}")]
     public async Task<IActionResult> GetById(Guid id)
     {
+        if (User.IsInRole(SystemRoles.Student) && Core.Security.SessionAccess.UserId(User) != id) return NotFound();
         var student = await _userService.GetByIdAsync(id);
         return student is null ? NotFound() : Ok(student);
     }
@@ -76,7 +77,7 @@ public class StudentsController : ControllerBase
 
     [HttpPost("{id:guid}/photo")]
     [Authorize(Roles = SystemRoles.Examiner)]
-    public async Task<IActionResult> UploadPhoto(Guid id, IFormFile photo)
+    public async Task<IActionResult> UploadPhoto(Guid id, IFormFile photo, [FromServices] DataAccessLayer.Data.AppDbContext db)
     {
         if (photo is null || photo.Length == 0)
             return BadRequest(new { message = "Файл порожній" });
@@ -84,29 +85,19 @@ public class StudentsController : ControllerBase
         var student = await _userService.GetByIdAsync(id);
         if (student is null) return NotFound();
 
+        if (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(db.Sessions,s => s.StudentId==id && !s.IsFinished)) return Conflict(new {message="Завершіть активну спробу перед зміною еталона особи."});
         var inferenceImages = GetInferenceImagesPath();
         Directory.CreateDirectory(inferenceImages);
 
-        // Зберігаємо і по GUID і по Login, щоб мікросервіс Inference знаходив у будь-якому випадку
+        if (photo.Length > 4 * 1024 * 1024) return BadRequest(new { message = "Photo too large." });
+        var bytes = new byte[photo.Length];
+        await using (var input = photo.OpenReadStream()) await input.ReadExactlyAsync(bytes);
+        if (bytes.Length < 3 || bytes[0] != 0xff || bytes[1] != 0xd8 || bytes[2] != 0xff)
+            return BadRequest(new { message = "Upload a JPEG photograph." });
         var filePathById = Path.Combine(inferenceImages, $"{id}.jpg");
-        var filePathByLogin = Path.Combine(inferenceImages, $"{student.Login}.jpg");
-
-        await using (var stream = System.IO.File.Create(filePathById))
-        {
-            await photo.CopyToAsync(stream);
-        }
-
-        if (!string.IsNullOrWhiteSpace(student.Login))
-        {
-            try
-            {
-                System.IO.File.Copy(filePathById, filePathByLogin, true);
-            }
-            catch
-            {
-                // ignore
-            }
-        }
+        var temporary = filePathById + "." + Guid.NewGuid().ToString("N") + ".upload";
+        await System.IO.File.WriteAllBytesAsync(temporary, bytes);
+        System.IO.File.Move(temporary, filePathById, true);
 
         // Зберігаємо відносний шлях у БД
         var photoUrl = $"images/{id}.jpg";
@@ -116,7 +107,7 @@ public class StudentsController : ControllerBase
     }
 
     [HttpGet("{id:guid}/photo")]
-    [AllowAnonymous]
+    [Authorize(Roles = SystemRoles.Examiner)]
     public async Task<IActionResult> GetPhoto(Guid id)
     {
         var student = await _userService.GetByIdAsync(id);
@@ -125,13 +116,7 @@ public class StudentsController : ControllerBase
 
         var inferenceImages = GetInferenceImagesPath();
         var filePathById = Path.Combine(inferenceImages, $"{id}.jpg");
-        var filePathByLogin = Path.Combine(inferenceImages, $"{student.Login}.jpg");
-
-        string? targetPath = null;
-        if (System.IO.File.Exists(filePathById))
-            targetPath = filePathById;
-        else if (System.IO.File.Exists(filePathByLogin))
-            targetPath = filePathByLogin;
+        string? targetPath = System.IO.File.Exists(filePathById) ? filePathById : null;
 
         if (targetPath is null)
             return NotFound(new { message = "Файл фото відсутній" });
@@ -148,6 +133,9 @@ public class StudentsController : ControllerBase
         {
             await _userService.DeleteAsync(id);
             return NoContent();
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException) {
+            return Conflict(new { message = "Історія спроб зберігається. Запис із пов'язаними спробами не можна видалити." });
         }
         catch (KeyNotFoundException ex)
         {

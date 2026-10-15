@@ -3,6 +3,11 @@ layout: ../../layouts/DocsLayout.astro
 title: "07. Student Portal & Distribution Architecture"
 ---
 
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
 # 7. Component View: Student Portal & Distribution Architecture
 
 The **Student Portal** is a static, zero-dependency onboarding and client delivery web application hosted under the `/landing/` route on the edge reverse proxy. It provides candidates with clear pre-exam guidelines, hardware requirements, troubleshooting walkthroughs, and direct download links for the Windows desktop client.
@@ -16,25 +21,7 @@ To ensure 100% reliability even when backend databases or microservices are unde
 * **Direct Edge Delivery:** Served directly from Nginx static file storage (`/usr/share/nginx/html/landing`), consuming negligible CPU and RAM on the host server.
 * **Dual Distribution Channels:** Offers both an Inno Setup automated Windows installer (`Online_Proctoring_System_Setup.exe`) and a standalone portable executable (`Online_Proctoring_System_Client.exe`).
 
-```mermaid
-graph TD
-    subgraph Student Browser
-        Student["Student / Candidate Workstation"]
-    end
-
-    subgraph Edge Nginx Server
-        StaticDir["Static Assets (/landing/*)\n• index.html\n• Setup.exe (Inno Setup)\n• Client.exe (Standalone)"]
-    end
-
-    subgraph Backend Services
-        CoreAPI["Core API (Not required for landing)"]
-        Postgres["Database (Not required for landing)"]
-    end
-
-    Student -->|1. GET /landing/| StaticDir
-    Student -->|2. Download Online_Proctoring_System_Setup.exe| StaticDir
-    Student -->|3. Launches Native Client & Connects| CoreAPI
-```
+<Mermaid source={"graph TD\n    subgraph Student Browser\n        Student[\"Student / Candidate Workstation\"]\n    end\n\n    subgraph Edge Nginx Server\n        StaticDir[\"Static Assets (/landing/*)\\n• index.html\\n• Setup.exe (Inno Setup)\\n• Client.exe (Standalone)\"]\n    end\n\n    subgraph Backend Services\n        CoreAPI[\"Core API (Not required for landing)\"]\n        Postgres[\"Database (Not required for landing)\"]\n    end\n\n    Student -->|\"1. GET /landing/\"| StaticDir\n    Student -->|\"2. Download Online_Proctoring_System_Setup.exe\"| StaticDir\n    Student -->|\"3. Launches Native Client & Connects\"| CoreAPI"} />
 
 ---
 
@@ -42,18 +29,13 @@ graph TD
 
 The landing portal guides candidates through four sequential steps before their exam starts:
 
-```mermaid
-graph LR
-    S1["Step 1: Download & Install\nDownload .exe installer\nBypass SmartScreen warning"] --> S2["Step 2: Clean Environment\nClose Discord, Telegram, OBS\nUnplug secondary monitors"]
-    S2 --> S3["Step 3: Authenticate\nInput login & password\nissued by university group"]
-    S3 --> S4["Step 4: Biometrics & Media\nWebcam & Mic authorization\nAccept biometric consent"]
-```
+<Mermaid source={"graph LR\n    S1[\"Step 1: Download & Install\\nDownload .exe installer\\nBypass SmartScreen warning\"] --> S2[\"Step 2: Clean Environment\\nClose Discord, Telegram, OBS\\nUnplug secondary monitors\"]\n    S2 --> S3[\"Step 3: Authenticate\\nInput login & password\\nissued by university group\"]\n    S3 --> S4[\"Step 4: Biometrics & Media\\nWebcam & Mic authorization\\nAccept biometric consent\"]"} />
 
 ### 1. Windows SmartScreen Guidance
 Because the client application is distributed within an academic institution and is not signed with an expensive commercial Extended Validation (EV) code signing certificate, Windows Defender SmartScreen may display an *"Unknown Publisher"* notification:
 * The landing page provides explicit visual steps:
-  1. Click **"More info"** (`Докладніше`).
-  2. Click **"Run anyway"** (`Виконати у будь-якому разі`).
+  1. Click **"More info"**.
+  2. Click **"Run anyway"**.
 
 ### 2. Minimum System Requirements Matrix
 

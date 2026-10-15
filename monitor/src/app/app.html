@@ -1,5 +1,5 @@
 <div class="dashboard-container">
-  <aside class="sidebar">
+  <aside class="sidebar" *ngIf="isLoggedIn">
     <div class="logo">
       <span class="logo-icon">🛡️</span>
       <h1 class="logo-text">Online<span>Proctoring</span></h1>
@@ -62,13 +62,13 @@
   <main class="main-content">
     <header class="top-bar">
       <div class="status-group">
-        <span class="status-dot online"></span>
-        <span class="system-status">Система активна &bull; AI Inference Online &bull; Nginx Gateway</span>
+
+        <span class="system-status">Панель викладача</span>
       </div>
       <div>
         @if (!isLoggedIn) {
           <a routerLink="/login" style="display: inline-block; padding: 6px 14px; background: #008080; color: white; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 500;">
-            🔑 Увійти як викладач (admin)
+            🔑 Увійти як викладач
           </a>
         }
       </div>

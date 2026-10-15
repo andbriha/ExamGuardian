@@ -3,9 +3,14 @@ layout: ../../layouts/DocsLayout.astro
 title: "01. System Context & Threat Model"
 ---
 
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
 # 1. System Context & Security Threat Model
 
-The **Online Proctoring System** is an enterprise-grade, privacy-first automated proctoring solution designed to protect academic integrity during remote examinations. It unifies low-level operating system controls, high-performance multimedia capture, continuous computer vision and audio machine learning pipelines, and a real-time dispatcher monitoring dashboard.
+**ExamGuardian** is an enterprise-grade, privacy-first automated proctoring solution designed to protect academic integrity during remote examinations. It unifies low-level operating system controls, high-performance multimedia capture, continuous computer vision and audio machine learning pipelines, and a real-time dispatcher monitoring dashboard.
 
 ---
 
@@ -17,7 +22,7 @@ Traditional online exams using commercial video conferencing platforms (Zoom, MS
 3. Human proctors experience fatigue when monitoring multiple video tiles simultaneously, missing brief glances at concealed notes or whispers.
 4. Commercial SaaS proctoring services charge high per-student fees and store sensitive student biometric data on foreign third-party cloud servers.
 
-The **Online Proctoring System** solves these challenges through a self-hosted, scalable architecture that executes automated multi-modal analysis while keeping all institutional data on university-managed infrastructure.
+**ExamGuardian** solves these challenges through a self-hosted, scalable architecture that executes automated multi-modal analysis while keeping all institutional data on university-managed infrastructure.
 
 ---
 
@@ -25,15 +30,7 @@ The **Online Proctoring System** solves these challenges through a self-hosted, 
 
 The system architecture is engineered specifically to counteract four primary vectors of remote exam cheating:
 
-```mermaid
-graph LR
-    subgraph Vectors of Academic Dishonesty
-        V1["01. Identity Spoofing\n• Static photographs\n• Pre-recorded looping video\n• Proxy test takers"]
-        V2["02. Prohibited Gadgets\n• Smartphones on desk\n• Wireless micro-earpieces\n• Physical textbooks & cheat sheets"]
-        V3["03. Screen & Application Evasion\n• Window switching (Alt+Tab)\n• Discord / Telegram / ChatGPT\n• Screen sharing & RDP tools"]
-        V4["04. Virtual Environments\n• VMware / VirtualBox hypervisors\n• Virtual cameras (OBS Virtual Cam)\n• Multi-monitor arrangements"]
-    end
-```
+<Mermaid source={"graph LR\n    subgraph Vectors of Academic Dishonesty\n        V1[\"01. Identity Spoofing\\n• Static photographs\\n• Pre-recorded looping video\\n• Proxy test takers\"]\n        V2[\"02. Prohibited Gadgets\\n• Smartphones on desk\\n• Wireless micro-earpieces\\n• Physical textbooks & cheat sheets\"]\n        V3[\"03. Screen & Application Evasion\\n• Window switching (Alt+Tab)\\n• Discord / Telegram / ChatGPT\\n• Screen sharing & RDP tools\"]\n        V4[\"04. Virtual Environments\\n• VMware / VirtualBox hypervisors\\n• Virtual cameras (OBS Virtual Cam)\\n• Multi-monitor arrangements\"]\n    end"} />
 
 ### Vector 1: Identity Spoofing & Impersonation
 * **Attack:** A student replaces their live camera feed with a pre-recorded loop, holds up a high-resolution photo, or has another individual complete the exam.
@@ -79,28 +76,4 @@ The system adheres to strict data privacy principles:
 
 The following C4 Context diagram illustrates the system boundary and the interactions between users, the proctoring platform, and external systems:
 
-<div class="mermaid">
-{`
-graph TD
-    %% Actors
-    Student([Student / Candidate]):::actor
-    Proctor([Examiner / Proctor]):::actor
-    Admin([System Administrator]):::actor
-    LMS[External LMS / SIS<br/>Moodle, Canvas, QTI]:::external
-
-    %% System Boundary
-    subgraph SystemBoundary["Online Proctoring System Boundary"]
-        OPS[Online Proctoring System<br/>Core Platform]:::system
-    end
-
-    %% Interactions
-    Student -->|Downloads client, performs biometric check,<br/>completes exam & streams video/telemetry| OPS
-    Proctor -->|Creates exams, monitors live sessions,<br/>reviews AI violation alerts & exports protocols| OPS
-    Admin -->|Deploys Docker containers, monitors health,<br/>manages database backups| OPS
-    OPS -.->|Imports QTI test questions &<br/>exports grades/reports| LMS
-
-    classDef actor fill:#0284c7,stroke:#0369a1,stroke-width:2px,color:#ffffff;
-    classDef system fill:#0f172a,stroke:#38bdf8,stroke-width:3px,color:#ffffff;
-    classDef external fill:#64748b,stroke:#475569,stroke-width:2px,color:#ffffff;
-`}
-</div>
+<Mermaid source={"graph TD\n    %% Actors\n    Student([Student / Candidate]):::actor\n    Proctor([Examiner / Proctor]):::actor\n    Admin([System Administrator]):::actor\n    LMS[External LMS / SIS<br/>Moodle, Canvas, QTI]:::external\n\n    %% System Boundary\n    subgraph SystemBoundary[\"ExamGuardian Platform Boundary\"]\n        OPS[ExamGuardian<br/>Core Platform]:::system\n    end\n\n    %% Interactions\n    Student -->|\"Downloads client, performs biometric check,<br/>completes exam & streams video/telemetry\"| OPS\n    Proctor -->|\"Creates exams, monitors live sessions,<br/>reviews AI violation alerts & exports protocols\"| OPS\n    Admin -->|\"Deploys Docker containers, monitors health,<br/>manages database backups\"| OPS\n    OPS -.->|\"Imports QTI test questions &<br/>exports grades/reports\"| LMS\n\n    classDef actor fill:#0284c7,stroke:#0369a1,stroke-width:2px,color:#ffffff;\n    classDef system fill:#0f172a,stroke:#38bdf8,stroke-width:3px,color:#ffffff;\n    classDef external fill:#64748b,stroke:#475569,stroke-width:2px,color:#ffffff;"} />

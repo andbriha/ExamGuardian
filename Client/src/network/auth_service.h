@@ -1,3 +1,4 @@
+#include <QDateTime>
 #pragma once
 #include <QObject>
 #include <QNetworkAccessManager>
@@ -8,6 +9,7 @@ struct UserCredentials {
     QString accessToken;
     QString login;
     QString role;
+    QDateTime expiresAt;
 };
 
 class AuthService : public QObject {

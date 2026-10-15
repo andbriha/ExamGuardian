@@ -1,24 +1,37 @@
 ; Inno Setup script for Online Proctoring System Client
 ; Creates an all-in-one standalone installer for students
 
+#ifndef BuildFlavor
+#define BuildFlavor "production"
+#endif
+#if BuildFlavor == "development"
+#define MyAppName "ExamGuardian DEV Client"
+#define MyAppId "ExamGuardian.Development.Client"
+#define MyAppDirectory "ExamGuardianDev"
+#define MyInstallerName "ExamGuardian_Dev_Setup"
+#else
 #define MyAppName "Online Proctoring System Client"
+#define MyAppId "{{8B7B2B64-94E5-4D56-A8F2-7A950BC71D0E}"
+#define MyAppDirectory "OnlineProctoringSystem"
+#define MyInstallerName "Online_Proctoring_System_Setup"
+#endif
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Online Proctoring System"
 #define MyAppURL "http://localhost/landing/"
 #define MyAppExeName "Online_Proctoring_System_Client.exe"
 
 [Setup]
-AppId={{8B7B2B64-94E5-4D56-A8F2-7A950BC71D0E}
+AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\OnlineProctoringSystem
+DefaultDirName={autopf}\{#MyAppDirectory}
 DisableProgramGroupPage=yes
-OutputDir=..\Landing
-OutputBaseFilename=Online_Proctoring_System_Setup
+OutputDir={#ReleaseOutput}
+OutputBaseFilename={#MyInstallerName}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -33,7 +46,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "Deploy\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#DeployDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

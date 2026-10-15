@@ -15,7 +15,7 @@ public:
     explicit InputBlocker(QObject *parent = nullptr);
     ~InputBlocker();
 
-    void setKeyBlock(bool enable);
+    bool setKeyBlock(bool enable);
 
 private:
     QString getActiveWindowTitle();

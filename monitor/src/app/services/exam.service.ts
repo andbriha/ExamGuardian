@@ -22,10 +22,21 @@ export interface ExamDto {
   id: number;
   title: string;
   description?: string;
+  passingScore?: number;
+  maxAttempts?: number;
+  allowedGroup?: string;
+  allowedObjects?: string[];
+  allowSpeech?: boolean;
+  flagHeadMovement?: boolean;
   durationMinutes: number;
   scheduledStartTime?: string;
+  scheduledStartLocal?: string;
+  timeZoneId?: string;
+  scheduledEndTime?: string;
+  serverTimeUtc?: string;
   createdAt?: string;
   creatorId?: string;
+  questionCount?: number;
   questions?: QuestionDto[];
 }
 
@@ -33,6 +44,16 @@ export interface CreateExamDto {
   title: string;
   description?: string;
   scheduledStartTime?: string;
+  scheduledStartLocal?: string;
+  timeZoneId?: string;
+  scheduledEndTime?: string;
+  serverTimeUtc?: string;
+  passingScore?: number;
+  maxAttempts?: number;
+  allowedGroup?: string;
+  allowedObjects?: string[];
+  allowSpeech?: boolean;
+  flagHeadMovement?: boolean;
   durationMinutes: number;
   creatorId?: string;
   questions: {

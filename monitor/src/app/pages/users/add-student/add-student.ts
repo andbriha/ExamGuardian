@@ -79,13 +79,9 @@ export class AddStudentComponent implements OnInit {
     const randNum = Math.floor(10 + Math.random() * 90);
     this.newForm.login = `${loginBase}_${randNum}`;
 
-    // Generate secure and readable password
-    const words = ['Guard', 'Shield', 'Study', 'Exam', 'Cyber', 'Smart', 'Eagle', 'Falcon'];
-    const word = words[Math.floor(Math.random() * words.length)];
-    const passNum = Math.floor(1000 + Math.random() * 9000);
-    const symbols = ['#', '!', '$', '%', '@'];
-    const sym = symbols[Math.floor(Math.random() * symbols.length)];
-    this.newForm.pass = `${word}-${passNum}${sym}`;
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!#%';
+    const random = crypto.getRandomValues(new Uint32Array(20));
+    this.newForm.pass = Array.from(random, n => alphabet[n % alphabet.length]).join('');
 
     this.copySuccess = false;
     this.cdr.detectChanges();
@@ -157,7 +153,7 @@ export class AddStudentComponent implements OnInit {
       error: (err) => {
         this.isSaving = false;
         if (err.status === 401 || err.status === 403) {
-          if (confirm('Для додавання студентів потрібні права викладача (Ви не авторизовані).\n\nПерейти на сторінку входу? (Логін: admin, Пароль: password12345)')) {
+          if (confirm('Для додавання студентів потрібні права викладача (Ви не авторизовані).\n\nПерейти на сторінку входу? ')) {
             this.router.navigate(['/login']);
           }
         } else {

@@ -3,141 +3,136 @@ layout: ../../layouts/DocsLayout.astro
 title: "05. FastAPI AI Analytics Engine"
 ---
 
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
 # 5. Component View: FastAPI AI Analytics Engine
 
-The **AI Analytics Engine** is an isolated, horizontally scalable microservice built with Python 3.11, FastAPI, PyTorch, and ONNX Runtime. Operating asynchronously from the Core Gateway, it performs multi-modal computer vision and acoustic anomaly detection to identify cheating behaviors in real time.
+The **AI Analytics Engine** is an isolated, horizontally scalable microservice built with Python 3.11, FastAPI, PyTorch, and ONNX Runtime. Operating asynchronously from the Core Gateway, it performs **pre-exam biometric identity verification with dynamic liveness challenges** and **continuous multi-modal computer vision and acoustic anomaly detection** throughout the exam session.
 
 ---
 
 ## 5.1 Pipeline Overview
 
-```mermaid
-graph TD
-    subgraph Ingestion Layer
-        FrameReq["POST /api/v1/frame/analyze\n(Base64 JPEG + SessionId)"]
-        AudioReq["POST /api/v1/audio/analyze\n(16kHz PCM Buffer)"]
-    end
-
-    subgraph Vision Pipeline
-        MP["MediaPipe Face Landmarker\n(468 3D Mesh Points)"]
-        YOLO["YOLOv8 Object Detector\n(ONNX Runtime Engine)"]
-        Ear["Ear Canal Cropper &\nMicro-Earpiece Detector"]
-    end
-
-    subgraph Acoustic Pipeline
-        VAD["WebRTC Voice Activity Detector\n(Frame Size: 30ms / 480 samples)"]
-        Spectral["Spectral Energy &\nWhisper Classifier"]
-    end
-
-    subgraph Decision & Webhook Engine
-        Temporal["Temporal Smoothing &\nDebounce Buffer (> 1.5s)"]
-        Anomaly["Anomaly Aggregator &\nSeverity Scorer"]
-        Notifier["Core API Webhook Client\n(POST /api/violations/report)"]
-    end
-
-    FrameReq --> MP
-    FrameReq --> YOLO
-    FrameReq --> Ear
-    AudioReq --> VAD
-    AudioReq --> Spectral
-
-    MP --> Temporal
-    YOLO --> Temporal
-    Ear --> Temporal
-    VAD --> Temporal
-    Spectral --> Temporal
-
-    Temporal --> Anomaly
-    Anomaly --> Notifier
-```
+<Mermaid source={"graph TD\n    subgraph Pre-Exam Verification\n        Challenge[\"GET /verify/challenge\\n(Random gesture task)\"]\n        Verify[\"POST /verify/identity-and-liveness\\n(Frame + Task + JWT)\"]\n        DeepFace[\"DeepFace Facenet512\\n(Cosine distance < 0.40)\"]\n        Liveness[\"MediaPipe Head-Pose\\nGesture Compliance Check\"]\n    end\n\n    subgraph Runtime Analysis\n        FrameReq[\"POST /analyze/frame\\n(Base64 JPEG + session_id + ts)\"]\n        AudioReq[\"POST /analyze/audio\\n(16kHz PCM bytes)\"]\n    end\n\n    subgraph Vision Pipeline\n        MP[\"MediaPipe Face Landmarker\\n(468 3D Mesh Points)\"]\n        YOLO[\"YOLOv8 Nano ONNX\\n(Object Detector)\"]\n        Ear[\"Ear Canal Crop\\nMicro-Earpiece Detector\"]\n    end\n\n    subgraph Acoustic Pipeline\n        VAD[\"WebRTC Voice Activity Detector\\n(16kHz / 30ms frames)\"]\n    end\n\n    subgraph Decision Engine\n        Temporal[\"Temporal Debounce Buffer\\n(persists > threshold seconds)\"]\n        Notifier[\"Core API Webhook\\n(POST /api/Violations with X-Api-Key)\"]\n    end\n\n    Challenge --> Verify\n    Verify --> DeepFace\n    Verify --> Liveness\n\n    FrameReq --> MP\n    FrameReq --> YOLO\n    FrameReq --> Ear\n    AudioReq --> VAD\n\n    MP --> Temporal\n    YOLO --> Temporal\n    Ear --> Temporal\n    VAD --> Temporal\n    Temporal --> Notifier"} />
 
 ---
 
-## 5.2 Mathematical Model: Head-Pose Estimation & Gaze Tracking
+## 5.2 Pre-Exam: Active Liveness Challenge System
 
-To detect when a student is looking away from their monitor toward cheat sheets or an accomplice, the system solves the **Perspective-n-Point (PnP)** problem in real time.
+Before the exam begins, the system verifies **both identity and liveness** using a challenge-response protocol to prevent photo/video spoofing.
 
-### 1. 3D Canonical Face Model
+<Mermaid source={"sequenceDiagram\n    participant C as Qt Client\n    participant AI as FastAPI Engine\n    participant DB as Core API\n\n    C->>AI: GET /verify/challenge\n    AI-->>C: {\"task\": \"turn_left\"} | {\"task\": \"turn_right\"} | {\"task\": \"nod\"}\n\n    C->>C: Display instruction to student: \"Turn your head left\"\n    C->>AI: POST /verify/identity-and-liveness\\n{frame (base64), task, JWT Bearer}\n\n    AI->>AI: 1. Decode JWT → extract studentId\n    AI->>DB: Fetch reference photo (images/{studentId}.jpg)\n    AI->>AI: 2. DeepFace Facenet512 cosine match\n    AI->>AI: 3. MediaPipe head-pose: verify gesture compliance\n\n    alt Identity match & gesture confirmed\n        AI-->>C: {\"verified\": true, \"stage\": \"ok\", \"id_distance\": 0.42}\n    else Face mismatch\n        AI-->>C: {\"verified\": false, \"stage\": \"identity\", \"id_distance\": 0.81}\n    else Wrong gesture / no movement\n        AI-->>C: {\"verified\": false, \"stage\": \"liveness\"}\n    end"} />
+
+### Challenge Tasks
+| Task | Detection Logic |
+| :-- | :-- |
+| `"turn_left"` | Yaw angle must decrease significantly from baseline (head rotates left) |
+| `"turn_right"` | Yaw angle must increase significantly from baseline (head rotates right) |
+| `"nod"` | Pitch angle must increase then decrease (vertical head movement) |
+
+### Frontal liveness checkpoints
+Each action begins with a neutral frontal frame that passes both reference identity and passive anti-spoofing. Its server-owned anchor lasts at most 30 seconds and is invalidated by a face/identity/quality failure or a gap over five seconds. During the requested gesture every fresh usable frame still needs a reference identity match; the passive frontal classifier is not applied to deliberately turned faces or closed eyes. Returning to neutral must pass passive anti-spoofing again before an action is accepted. A negative return checkpoint waits for a new neutral frame without crediting the action or issuing admission. Thresholds remain unchanged.
+
+A successful checkpoint is not proof of general resistance to replay or deepfakes; labelled live-person and attack trials are still required. The UI distinguishes preparing the neutral baseline, performing the action and confirming the frontal return.
+
+---
+
+## 5.3 Runtime: Continuous Frame Analysis (`POST /analyze/frame`)
+
+During the active exam session, the Qt client sends camera frames at 1–2 FPS to `/analyze/frame`. Two parallel analyzers run concurrently:
+
+1. **`LivenessAnalyzer.analyze_continuous`** — MediaPipe head-pose tracking
+2. **`ObjectDetector.detect`** — YOLOv8 object classification
+
+### Complete Violation Type Catalogue
+
+| Violation Type | Source | Trigger Condition | Severity |
+| :-- | :-- | :-- | :-- |
+| `face_missing` | MediaPipe | No face detected in frame | Warning |
+| `looking_away_left` | MediaPipe | Yaw < -0.19 rad (~ -11°) sustained | Warning |
+| `looking_away_right` | MediaPipe | Yaw > +0.19 rad (~ +11°) sustained | Warning |
+| `looking_down` | MediaPipe | Pitch > +0.17 rad (~ +10°) — desk/phone | Warning |
+| `micro_earpiece` | MediaPipe + HSV | Dark/white foreign body in ear canal crop | **Critical** |
+| `cell_phone` | YOLOv8 class 67 | Smartphone detected (confidence ≥ 0.45) | **Critical** |
+| `multiple_faces` | YOLOv8 class 0 | More than one person detected | **Critical** |
+| `extra_person` | YOLOv8 class 0 | Secondary unauthorized person (confidence ≥ 0.50) | **Critical** |
+| `voice_activity` | WebRTC VAD | Speech detected > 3.0s threshold | Warning |
+
+---
+
+## 5.4 Mathematical Model: Head-Pose Estimation & Gaze Tracking
+
+To detect when a student is looking away from their monitor, the system solves the **Perspective-n-Point (PnP)** problem in real time.
+
+### 3D Canonical Face Model
 Six key facial landmarks are extracted from MediaPipe's 468 mesh points:
-* Nose tip (Index 1)
-* Chin (Index 199)
-* Left eye outer corner (Index 33)
-* Right eye outer corner (Index 263)
-* Left mouth corner (Index 61)
-* Right mouth corner (Index 291)
+* Nose tip (Index 1), Chin (Index 199)
+* Left eye outer corner (Index 33), Right eye outer corner (Index 263)
+* Left mouth corner (Index 61), Right mouth corner (Index 291)
 
-These 2D image coordinates `(u, v)` are mapped to a canonical 3D human head model `P_w = (X_w, Y_w, Z_w)^T` using OpenCV's `solvePnP` with Levenberg-Marquardt optimization:
+These 2D image coordinates `(u, v)` are mapped to a canonical 3D head model using OpenCV's `solvePnP`:
 
 ```text
 [ u, v, 1 ]^T = K * [ R | T ] * [ X_w, Y_w, Z_w, 1 ]^T
 ```
 
-Where `K` is the camera intrinsic calibration matrix:
+Where `K` is the camera intrinsic matrix:
 ```text
 K = [ [fx,  0, cx],
       [ 0, fy, cy],
       [ 0,  0,  1] ]
 ```
 
-### 2. Euler Angle Decomposition
-From the rotation matrix `R`, Euler angles (Yaw `ψ`, Pitch `θ`, Roll `φ`) are extracted:
+### Euler Angle Decomposition
+From the rotation matrix `R`:
 ```text
-yaw   = atan2(R[1][0], R[0][0])
-pitch = atan2(-R[2][0], sqrt(R[2][1]^2 + R[2][2]^2))
-roll  = atan2(R[2][1], R[2][2])
+yaw   = atan2(R[1][0], R[0][0])      # Left-right rotation
+pitch = atan2(-R[2][0], sqrt(R[2][1]^2 + R[2][2]^2))   # Up-down tilt
+roll  = atan2(R[2][1], R[2][2])      # Head tilt
 ```
 
-### 3. Anomaly Decision Thresholds
-* **Looking Left (Lateral Hint / Secondary Screen):**
-  `yaw < -0.19 radians (~ -11°)`
-* **Looking Right (Lateral Notes / Accomplice):**
-  `yaw > +0.19 radians (~ +11°)`
-* **Looking Down (Smartphone / Desk Cheat Sheet):**
-  `pitch > +0.17 radians (~ +10°)`
-* **Face Count Violations:**
-  * Zero faces detected: Student absent or fully obscured.
-  * More than 1 face detected: Unauthorized secondary person present in the testing room.
+---
+
+## 5.5 Prohibited Object Detection (YOLOv8 Nano)
+
+The microservice runs **YOLOv8 Nano** (`yolov8n.pt`) optimized with ONNX Runtime:
+
+| Class ID | Target Object | Confidence Threshold | Severity |
+| :-- | :-- | :-- | :-- |
+| **67** | Cell Phone / Smartphone | ≥ 0.45 | **Critical** |
+| **0** | Person (additional) | ≥ 0.50 | **Critical** |
+| **73** | Book / Notes | ≥ 0.55 | Warning |
+| **63** | Laptop (secondary) | ≥ 0.50 | **Critical** |
+
+### Temporal Debounce
+Single-frame transient spikes are filtered — a violation is only dispatched if the condition persists across consecutive frames for more than **1.5 seconds**.
 
 ---
 
-## 5.3 Prohibited Object Detection (YOLOv8)
+## 5.6 Concealed Micro-Earpiece Detection
 
-The microservice runs an optimized YOLOv8 model packaged for **ONNX Runtime** with DirectML / CUDA acceleration:
+<Mermaid source={"graph LR\n    FaceMesh[\"MediaPipe FaceMesh\\nLandmarks 234 & 454\"] --> EarCrop[\"Bounding Box Extraction\\nLeft & Right Ear Concha\"]\n    EarCrop --> Enhance[\"CLAHE Contrast\\nEnhancement\"]\n    Enhance --> HSV[\"HSV + Grayscale Mask\\nDark region / White earbud analysis\"]\n    HSV --> Alert[\"Violation: micro_earpiece\"]"} />
 
-| Class ID | Target Object | Confidence Cutoff | Severity Assigned |
-| :--- | :--- | :--- | :--- |
-| **67** | Cell Phone / Smartphone | >= 0.45 | **Critical** |
-| **0** | Second Person | >= 0.50 | **Critical** |
-| **73** | Book / Notes | >= 0.55 | **Warning** |
-| **63** | Secondary Laptop | >= 0.50 | **Critical** |
-
-### False Positive Mitigation
-Single-frame transient spikes (e.g., student briefly scratching their ear or lifting a water bottle) are filtered by a **Temporal Sliding Window**:
-* A violation is only triggered if an anomaly condition persists for at least 1.5 seconds across consecutive sampled frames.
+1. **Anatomical Anchor Localization:** Tracks landmark 234 (left tragus) and 454 (right tragus).
+2. **Dynamic Ear Cropping:** When |yaw| ≥ 0.12 (ear exposed), the canal region is cropped with 1.4× margin.
+3. **HSV Analysis:** Inspects for dark metallic earpieces and white silicone earbuds in the auditory canal region.
+4. **Classification:** High-contrast foreign bodies trigger an immediate `micro_earpiece` violation with the cropped image as evidence.
 
 ---
 
-## 5.4 Concealed Micro-Earpiece Detection
+## 5.7 Acoustic Anomaly Detection (WebRTC VAD)
 
-Students attempting high-stakes exam fraud sometimes use miniature magnetic or wireless inductive earpieces hidden inside the ear canal.
+Audio captured by WASAPI is sent as 16kHz mono PCM bytes to `POST /analyze/audio`:
 
-```mermaid
-graph LR
-    FaceMesh["MediaPipe FaceMesh\nLandmarks 234 & 454"] --> EarCrop["Bounding Box Extraction\nLeft & Right Ear Concha"]
-    EarCrop --> Enhance["CLAHE Contrast\nEnhancement"]
-    Enhance --> Classifier["Targeted Foreign Object\nClassifier (micro_earpiece)"]
-    Classifier --> Alert["Alert: Suspected Earpiece"]
-```
+* **WebRTC VAD:** Evaluates 30ms windows (480 samples) at aggressiveness mode `3` — eliminates ambient noise (fans, keyboards) while sensitive to human speech formants.
+* **Threshold:** If cumulative speech duration in the submitted chunk exceeds **3.0 seconds**, a `voice_activity` violation is dispatched.
+* **Use case:** Detects whispered answers, verbal dictation, or coaching from an accomplice in the room.
 
-1. **Anatomical Anchor Localization:** The system tracks landmark 234 (left tragus) and landmark 454 (right tragus).
-2. **Dynamic Ear Concha Cropping:** When the student's head rotates slightly (|yaw| >= 0.12), exposing the lateral ear canal, the ear region is cropped with a 1.4x margin.
-3. **Contrast Normalization:** Applies Contrast Limited Adaptive Histogram Equalization (CLAHE) to reveal dark contours inside the auditory canal.
-4. **Classification:** High-contrast foreign bodies matching the color and reflective signature of metallic micro-earpieces trigger an immediate proctor notification with a cropped visual snapshot.
+## 5.8 Shared analysis and admission
 
----
+Development and production use the same identity challenge, authenticated active-attempt checks, models and analysis routes. The development client menu does not bypass biometrics or disable camera/audio analysis. No artificial successful admission or analysis receipt is issued. Recognition quality and replay resistance still require labelled validation.
 
-## 5.5 Acoustic Anomaly Detection (WebRTC VAD)
-
-Audio captured by the student's microphone is sent in 16kHz PCM chunks:
-* **WebRTC Voice Activity Detection (VAD):** Evaluates 30ms windows (480 samples). Operating mode is set to aggressive (`mode = 3`) to eliminate steady ambient background fan or keyboard noise while sensitive to human speech formants.
-* **Whisper Energy Ratio:** Calculates the ratio of high-frequency unvoiced energy (2 kHz - 4 kHz) to low-frequency voiced energy. High ratios in sustained audio chunks flag whispered answers or dictation.
+Direction labels use the student's anatomical left/right. For unmirrored camera frames, nose movement toward image-right is a left turn. The landmark adapter normalizes this sign before challenge verification and continuous head-movement observations.

@@ -10,22 +10,24 @@ class AudioAnalyzer:
     Якщо студент говорить довше threshold_seconds — потенційна підказка."""
 
     def __init__(self, aggressiveness: int = 2, threshold_seconds: float = 3.0):
-        self._vad = webrtcvad.Vad(aggressiveness)  # 0-3, більше = суворіше
+        self.aggressiveness = aggressiveness
         self.threshold_seconds = threshold_seconds
 
     def analyze(self, pcm_bytes: bytes, sample_rate: int = 16000) -> dict:
         """pcm_bytes — сирі PCM байти, 16kHz, 16bit, mono"""
         frame_duration = 30   # мс
+        # VAD is stateful: do not carry one student's history into another's audio.
+        vad = webrtcvad.Vad(self.aggressiveness)
         frame_size     = int(sample_rate * frame_duration / 1000) * 2  # bytes
 
         frames         = [
             pcm_bytes[i:i + frame_size]
-            for i in range(0, len(pcm_bytes) - frame_size, frame_size)
+            for i in range(0, len(pcm_bytes) - frame_size + 1, frame_size)
         ]
 
         speech_frames = sum(
             1 for f in frames
-            if len(f) == frame_size and self._vad.is_speech(f, sample_rate)
+            if len(f) == frame_size and vad.is_speech(f, sample_rate)
         )
 
         speech_seconds = speech_frames * frame_duration / 1000

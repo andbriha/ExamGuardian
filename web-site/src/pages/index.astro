@@ -4,10 +4,10 @@ import Navigation from '../components/Navigation.astro'
 import Intro from '../components/Intro.astro'
 
 const threats = [
-    { title: "Identity Spoofing", desc: "Prevents students from using static photos, recorded videos, or having someone else take the exam." },
-    { title: "Hidden Mobile Devices", desc: "Detects smartphones placed in camera blind spots, under monitors, or near keyboards." },
-    { title: "Screen Broadcasting", desc: "Blocks real-time screen sharing via RDP, capture cards, or remote desktop software." },
-    { title: "Virtual Machines", desc: "Prevents the exam from running inside hypervisors or via hidden PCs using KVM switches." }
+    { title: "Identity Spoofing", desc: "Checks identity against an enrolled photograph and requests a timed pose transition. Attack resistance requires validation." },
+    { title: "Hidden Mobile Devices", desc: "Flags phones visible in the camera image for examiner review. Objects outside the image cannot be detected." },
+    { title: "Screen Broadcasting", desc: "Checks known remote access and sharing applications, records the screen and reports focus changes." },
+    { title: "Virtual Machines", desc: "Checks several virtual environment indicators before and during an attempt. External hardware remains a limitation." }
 ];
 
 const hybridFeatures = [
@@ -15,7 +15,7 @@ const hybridFeatures = [
         category: "Low-Level OS Control",
         items: [
             "Virtual Machine detection via CPUID and registry artifacts.",
-            "Strict process validation using SHA-256 hashing.",
+            "Known application checks using names, executable metadata and hashes.",
             "System-level blocking of keyboard interrupts and window switching.",
             "Detection of screen capture tools and RDP connections."
         ]
@@ -23,10 +23,10 @@ const hybridFeatures = [
     {
         category: "Intelligent Media Analysis",
         items: [
-            "Continuous biometric face verification (DeepFace).",
-            "Active Liveness Detection against photo/video spoofing (MediaPipe).",
+            "Periodic identity checks against the enrolled reference (DeepFace).",
+            "Bound, expiring pose challenges and anti-spoofing checks; effectiveness requires evaluation.",
             "Detection of prohibited objects like phones or extra people (YOLOv8).",
-            "Continuous voice activity and audio anomaly analysis (VAD)."
+            "Speech activity checks (VAD), subject to the exam policy."
         ]
     }
 ];
@@ -38,18 +38,18 @@ const businessValues = [
         icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
     },
     {
-        title: "Self-Hosted & GDPR Compliant",
-        desc: "You own the data. Spin up the infrastructure, run your exams, and shut it down. No third-party data retention ensures absolute privacy compliance.",
+        title: "Institutional Data Control",
+        desc: "Store exam data on infrastructure you manage. Configure access, TLS, backup and an explicit retention policy.",
         icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
     },
     {
         title: "One-Click Export",
-        desc: "After the session, instantly export grades, AI confidence scores, and visual evidence logs to PDF or CSV for seamless integration with your LMS.",
+        desc: "Review the academic score, evidence delivery and examiner verdict separately. Print the current report using your browser.",
         icon: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
     }
 ];
 ---
-<Layout title="Online Proctoring System | System Overview">
+<Layout title="ExamGuardian | AI-Powered Online Proctoring">
     <main class="container mx-auto px-4 py-16 flex flex-col gap-24 max-w-6xl">
         
         <Intro />
@@ -80,7 +80,7 @@ const businessValues = [
         <section class="flex flex-col gap-10">
             <div class="text-center max-w-3xl mx-auto flex flex-col gap-4">
                 <h2 class="text-3xl md:text-4xl font-bold text-slate-900">The 4 Vectors of Academic Dishonesty</h2>
-                <p class="text-lg text-slate-600">Standard video conferencing fails to prevent cheating. Our system specifically targets and neutralizes the four most common violation methods.</p>
+                <p class="text-lg text-slate-600">Identity, environment and media checks help the examiner inspect an attempt and make a reasoned decision.</p>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

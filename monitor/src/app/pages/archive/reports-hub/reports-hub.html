@@ -1,7 +1,7 @@
 <div class="hub-wrap">
   <div class="header">
     <h2>📊 Архів та Звіти</h2>
-    <p>Результати сесій тестування, аналіз проходження та генерація офіційних протоколів</p>
+    <p>Результати сесій тестування, аналіз проходження та генерація протоколів із збереженим висновком викладача</p>
   </div>
 
   <div *ngIf="isLoading" style="text-align: center; padding: 40px; color: #64748b;">
@@ -29,15 +29,21 @@
           <div class="metric">
             <span class="m-label">Підсумковий бал</span>
             <span class="m-val" [class.text-muted]="exam.status === 'aborted'">
-              {{ exam.status === 'aborted' ? '— / 100' : (exam.avgScore + '/100') }}
+              {{ exam.scoreCalculated === false || exam.status === 'aborted' ? 'Не розраховано' : (exam.avgScore + '/100') }}
             </span>
           </div>
           <div class="metric">
-            <span class="m-label">Порушень прокторингу</span>
+            <span class="m-label">Сигналів для перевірки</span>
             <span class="m-val" [class.text-red]="exam.violationsCount > 0">{{ exam.violationsCount }}</span>
           </div>
         </div>
         
+        <a [routerLink]="['/monitor', exam.examId]" [queryParams]="{session: exam.id}">Матеріали та сигнали сесії</a>
+        <p>{{ verdictLabel(exam.integrityVerdict) }}</p>
+        <p *ngIf="exam.integrityNotes">{{ exam.integrityNotes }}</p>
+        <button (click)="reviewReport(exam.id, 'Accepted')">Прийняти після перевірки</button>
+        <button (click)="reviewReport(exam.id, 'Rejected')">Не підтвердити добросовісність</button>
+        <button (click)="reviewReport(exam.id, 'Inconclusive')">Доказів недостатньо</button>
         <button class="btn-pdf" (click)="downloadReport(exam.id)">
           📄 Сформувати / Друк звіту
         </button>

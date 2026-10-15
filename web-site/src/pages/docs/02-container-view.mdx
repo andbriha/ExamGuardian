@@ -3,9 +3,14 @@ layout: ../../layouts/DocsLayout.astro
 title: "02. Container View (High-Level Architecture)"
 ---
 
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
 # 2. Container View (High-Level Architecture)
 
-The Container View decomposes the **Online Proctoring System** into its high-level runtime units: executables, web applications, background microservices, reverse proxies, and persistent storage databases.
+The Container View decomposes **ExamGuardian** into its high-level runtime units: executables, web applications, background microservices, reverse proxies, and persistent storage databases.
 
 ---
 
@@ -13,43 +18,7 @@ The Container View decomposes the **Online Proctoring System** into its high-lev
 
 The platform consists of seven primary architectural containers:
 
-```mermaid
-graph TD
-    subgraph Client Workstation
-        Client["Desktop Client\n(Qt 6.10 / C++17)"]
-        BrowserStudent["Student Web Browser\n(Downloads Client)"]
-    end
-
-    subgraph Edge Layer
-        Nginx["Edge Reverse Proxy\n(Nginx 1.25 Alpine / Port 80)"]
-        Portal["Student Portal\n(Static HTML5 / CSS3 / Vanilla JS)"]
-    end
-
-    subgraph Application Tier
-        CoreAPI["Core API Gateway\n(ASP.NET Core 9 / C# / Port 8080)"]
-        AIEngine["AI Inference Microservice\n(FastAPI / Python 3.11 / Port 8000)"]
-        MonitorPanel["Monitor Panel SPA\n(Angular 19 / TypeScript)"]
-    end
-
-    subgraph Data Tier
-        DB[("PostgreSQL 16 Alpine\n(Port 5432)")]
-        VideoStorage[("Exam Video Volumes\n(Core/ExamVideos/)")]
-    end
-
-    BrowserStudent -->|GET /landing/| Nginx
-    Nginx -->|Serves Static Files| Portal
-    Client -->|REST API & Video Chunks| Nginx
-    MonitorPanel -->|SignalR & REST| Nginx
-
-    Nginx -->|/api/*| CoreAPI
-    Nginx -->|/landing/*| Portal
-    Nginx -->|/*| MonitorPanel
-
-    CoreAPI -->|EF Core 9 SQL| DB
-    CoreAPI -->|Persists Chunks| VideoStorage
-    CoreAPI -->|POST /analyze (Keyframes & Audio)| AIEngine
-    AIEngine -->|POST /api/violations/report| CoreAPI
-```
+<Mermaid source={"graph TD\n    subgraph Client Workstation\n        Client[\"Desktop Client\\n(Qt 6.10 / C++17)\"]\n        BrowserStudent[\"Student Web Browser\\n(Downloads Client)\"]\n    end\n\n    subgraph Edge Layer\n        Nginx[\"Edge Reverse Proxy\\n(Nginx 1.25 Alpine / Port 80)\"]\n        Portal[\"Student Portal\\n(Static HTML5 / CSS3 / Vanilla JS)\"]\n    end\n\n    subgraph Application Tier\n        CoreAPI[\"Core API Gateway\\n(ASP.NET Core 9 / C# / Port 8080)\"]\n        AIEngine[\"AI Inference Microservice\\n(FastAPI / Python 3.11 / Port 8000)\"]\n        MonitorPanel[\"Monitor Panel SPA\\n(Angular 19 / TypeScript)\"]\n    end\n\n    subgraph Data Tier\n        DB[(\"PostgreSQL 16 Alpine\\n(Port 5432)\")]\n        VideoStorage[(\"Exam Video Volumes\\n(Core/ExamVideos/)\")]\n    end\n\n    BrowserStudent -->|\"GET /landing/\"| Nginx\n    Nginx -->|\"Serves Static Files\"| Portal\n    Client -->|\"REST API & Video Chunks\"| Nginx\n    MonitorPanel -->|\"SignalR & REST\"| Nginx\n\n    Nginx -->|\"/api/*\"| CoreAPI\n    Nginx -->|\"/landing/*\"| Portal\n    Nginx -->|\"/*\"| MonitorPanel\n\n    CoreAPI -->|\"EF Core 9 SQL\"| DB\n    CoreAPI -->|\"Persists Chunks\"| VideoStorage\n    CoreAPI -->|\"POST /analyze (Keyframes & Audio)\"| AIEngine\n    AIEngine -->|\"POST /api/violations/report\"| CoreAPI"} />
 
 ---
 

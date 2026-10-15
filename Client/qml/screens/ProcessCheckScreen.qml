@@ -13,11 +13,13 @@ Page {
     }
 
     Connections {
+        enabled: checkPage.StackView.status === StackView.Active || checkPage.StackView.status === StackView.Activating
         target: ProcessVM
         function onSnapshotReady(snapshot) {
             ProcessVM.saveSnapshotToFile(snapshot)
             loadingIndicator.running = false
-            checkPage.proceedToExam([])
+            ProcessVM.runFullScan()
+            if (ProcessVM.isEnvironmentSafe) checkPage.proceedToExam([])
         }
     }
 
@@ -119,14 +121,14 @@ Page {
                             font.pixelSize: 16
                         }
                         Label {
-                            text: "Захист від віртуалізації (VMware / VirtualBox / Hyper-V):"
+                            text: "Віртуалізація / контейнери (VM, Hyper-V, Docker, WSL):"
                             font.bold: true
                             font.pixelSize: 13
                             color: "#1E293B"
                             Layout.fillWidth: true
                         }
                         Label {
-                            text: !ProcessVM.isVmDetected ? "Фізичний ПК" : "Виявлено VM!"
+                            text: !ProcessVM.isVmDetected ? "Не виявлено" : "Допуск заблоковано"
                             font.bold: true
                             color: !ProcessVM.isVmDetected ? "#16A34A" : "#DC2626"
                         }
@@ -221,7 +223,7 @@ Page {
                     // Попередження про VM
                     Label {
                         visible: ProcessVM.isVmDetected
-                        text: "• Виявлено запуск у віртуальній машині: " + ProcessVM.vmDetails
+                        text: "• Віртуалізація активна або перевірку не завершено: " + ProcessVM.vmDetails
                         color: "#991B1B"
                         font.pixelSize: 13
                         wrapMode: Text.Wrap
@@ -247,7 +249,7 @@ Page {
                     }
 
                     Label {
-                        text: "Будь ласка, повністю закрийте вказані програми та натисніть «Оновити та перевірити знову»."
+                        text: "Закрийте вказані програми та служби віртуалізації. Активний Hyper-V/VBS також блокує допуск. Після усунення причин повторіть перевірку."
                         font.pixelSize: 12
                         font.bold: true
                         color: "#B91C1C"
@@ -269,7 +271,7 @@ Page {
                     spacing: 8
                     Text { text: "🎉"; font.pixelSize: 18 }
                     Label {
-                        text: "Усі перевірки пройдено успішно! Ви можете перейти до перевірки камери."
+                        text: (typeof DevVM !== "undefined" && DevVM.active.length) ? "DEV — blocking overridden. Review the detected findings above." : "Усі перевірки пройдено успішно! Ви можете перейти до перевірки камери."
                         color: "#047857"
                         font.bold: true
                         font.pixelSize: 14

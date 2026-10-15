@@ -1,6 +1,8 @@
+#include <QElapsedTimer>
 #pragma once
 #include <QObject>
 #include <QVideoSink>
+#include <QPointer>
 #include <QImage>
 #include <QString>
 #include <QDateTime>
@@ -13,14 +15,16 @@ public:
     void setVideoSink(QVideoSink *sink);
 
     void startVerificationSession();
-    void simulateUserActionCompleted();
+    void stopVerificationSession();
 
-    void startContinuousProctoring();
+    void startContinuousProctoring(int elapsedSeconds = 0);
     void stopContinuousProctoring();
 
 signals:
     void instructionReceived(QString instruction);
+    void verificationPhaseChanged(QString phase);
     void checkResult(bool passed, QString message);
+    void analysisUnavailable(const QString &message);
     void progressUpdated(const QString &message);
 
     void requestChallenge();
@@ -33,12 +37,17 @@ public slots:
 
 private slots:
     void grabAndSendFrame();
+    void captureVerificationFrame();
 
 private:
     QString translateTask(const QString &task);
 
-    QVideoSink *m_videoSink = nullptr;
+    QPointer<QVideoSink> m_videoSink;
     class QTimer *m_analysisTimer = nullptr;
+    class QTimer *m_verificationTimer = nullptr;
     QString m_currentTask;
     QDateTime m_sessionStartTime;
+    QElapsedTimer m_sessionClock;
+    QElapsedTimer m_frameClock;
+    int m_startOffset = 0;
 };

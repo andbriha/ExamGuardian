@@ -14,7 +14,6 @@ Page {
         target: ExamVM
 
         function onLoginSucceeded(token) {
-            MediaVM.setAuthToken(token)
             loginPage.loginSuccess()
         }
 
@@ -38,6 +37,12 @@ Page {
             color: "#333"
         }
 
+        TextField {
+            id: serverAddress
+            text: ExamVM.serverUrl
+            placeholderText: "Адреса сервера ExamGuardian"
+            Layout.fillWidth: true
+        }
         TextField {
             id: username
             placeholderText: "Login"
@@ -108,6 +113,7 @@ Page {
                 loginPage.errorText = ""
                 loginBtn.text    = "Входимо..."
                 loginBtn.enabled = false
+                if (!ExamVM.configureServer(serverAddress.text)) { errorText = "Некоректна адреса сервера"; loginBtn.enabled = true; return }
                 ExamVM.login(username.text, password.text)
             }
         }
@@ -127,7 +133,7 @@ Page {
                 wrapMode: Text.Wrap
                 text: "<b>1. Process Analysis:</b> SHA-256 hashes of all running programs will be collected.<br>" +
                       "<b>2. Blocking:</b> System keys Alt+Tab and Win will be disabled.<br>" +
-                      "<b>3. Monitoring:</b> Camera and microphone will be active throughout the exam."
+                      "<b>3. Monitoring:</b> Camera, microphone and screen recording will be active throughout the exam. Video may remain on this PC until delivery is confirmed."
             }
         }
     }

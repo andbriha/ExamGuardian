@@ -1,4 +1,4 @@
-﻿using DataAccessLayer.Data;
+using DataAccessLayer.Data;
 using DataAccessLayer.Entities;
 using DataAccessLayer.Interfaces;
 using DataAccessLayer.Repositories.Interfaces;
@@ -9,6 +9,8 @@ namespace DataAccessLayer.Repositories;
 public class ExamRepository : GenericRepository<Exam>, IExamRepository
 {
     public ExamRepository(AppDbContext context) : base(context) { }
+
+    public async Task<IEnumerable<Exam>> GetCatalogAsync() => await _dbSet.Include(e => e.Questions).OrderByDescending(e => e.CreatedAt).ToListAsync();
 
     public async Task<IEnumerable<Exam>> GetByCreatorAsync(Guid creatorId) =>
         await _dbSet

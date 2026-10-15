@@ -45,6 +45,12 @@ dist/
 # C++ & Qt
 Client/build*/
 Client/Deploy/
+Client/releases/
+backups/
+restored/
+Inference/state/
+Inference/models/vosk-model-*/
+Inference/evaluation-results/
 *.obj
 *.o
 *.pdb
@@ -61,3 +67,11 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+.env.dev
+.env.production
+
+.tools/
+
+Landing.dev/*.exe
+Landing.dev/release-manifest.json

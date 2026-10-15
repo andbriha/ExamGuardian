@@ -1,4 +1,4 @@
-﻿using BusinessLogicLayer.Dtos.Auth;
+using BusinessLogicLayer.Dtos.Auth;
 using BusinessLogicLayer.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +23,7 @@ public class AuthController : ControllerBase
     {
         var result = await _authService.LoginAsync(dto);
 
-        if (!result.Succeeded)
+        if (!result.Succeeded || result.Data is null)
             return Unauthorized(new { succeeded = false, errors = result.Errors });
 
         SetRefreshTokenCookie(result.Data.RefreshToken);
@@ -31,7 +31,7 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             succeeded = true,
-            response = new { result.Data.AccessToken, result.Data.ExpiresAt, result.Data.Login, result.Data.Role }
+            response = new { result.Data.AccessToken, result.Data.ExpiresAt, result.Data.Login, result.Data.Role, ProtocolVersion = 4 }
         });
     }
 
@@ -46,7 +46,7 @@ public class AuthController : ControllerBase
 
         var result = await _authService.RefreshTokenAsync(refreshToken);
 
-        if (!result.Succeeded)
+        if (!result.Succeeded || result.Data is null)
             return Unauthorized(new { succeeded = false, errors = result.Errors });
 
         SetRefreshTokenCookie(result.Data.RefreshToken);
@@ -54,7 +54,7 @@ public class AuthController : ControllerBase
         return Ok(new
         {
             succeeded = true,
-            response = new { result.Data.AccessToken, result.Data.ExpiresAt, result.Data.Login, result.Data.Role }
+            response = new { result.Data.AccessToken, result.Data.ExpiresAt, result.Data.Login, result.Data.Role, ProtocolVersion = 4 }
         });
     }
 
@@ -68,13 +68,21 @@ public class AuthController : ControllerBase
         return Ok(new { Login = login, Role = role });
     }
 
+    [Authorize, HttpPost("logout")]
+    public async Task<IActionResult> Logout([FromServices] DataAccessLayer.Data.AppDbContext db)
+    {
+        var user = await db.Users.FindAsync(Core.Security.SessionAccess.UserId(User));
+        if (user is not null) { user.RefreshToken = null; user.RefreshTokenExpiryTime = null; await db.SaveChangesAsync(); }
+        Response.Cookies.Delete("refreshToken"); return NoContent();
+    }
+
     private void SetRefreshTokenCookie(string refreshToken)
     {
         var cookieOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
+            Secure = Request.IsHttps || !HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment(),
+            SameSite = SameSiteMode.Lax,
             Expires = DateTime.UtcNow.AddDays(7)
         };
         Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);

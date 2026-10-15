@@ -3,6 +3,11 @@ layout: ../../layouts/DocsLayout.astro
 title: "06. Angular Monitor & Dispatcher Panel"
 ---
 
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
 # 6. Component View: Angular Monitor & Dispatcher Panel
 
 The **Monitor Panel** is an Angular 19 Single Page Application (SPA) designed for exam proctors, examiners, and academic administrators. It combines real-time WebSocket telemetry, interactive multi-chunk video auditing, automated student credential provisioning, and official academic integrity reporting.
@@ -13,49 +18,7 @@ The **Monitor Panel** is an Angular 19 Single Page Application (SPA) designed fo
 
 The frontend leverages Angular's modern Standalone Component architecture, Signals for fine-grained reactivity, RxJS for asynchronous event streams, and Tailwind CSS for interface design:
 
-```mermaid
-graph TD
-    subgraph Routing & Guards
-        Router["Angular App Router\n(app.routes.ts)"]
-        AuthGuard["AuthGuard (JWT Token Validation)"]
-    end
-
-    subgraph Service Tier
-        AuthSvc["AuthService (Session Token Storage)"]
-        SignalRSvc["SignalRService (WSS /hubs/exam-monitor)"]
-        ExamSvc["ExamService (REST Endpoints)"]
-        StudentSvc["StudentService (Group & Roster Logic)"]
-        ReportSvc["ReportService (Protocol Generation)"]
-    end
-
-    subgraph User & Exam Setup Modules
-        StudentsComp["StudentsComponent\n(Group Filtering & Rosters)"]
-        AddStudentComp["AddStudentComponent\n(Auto Credential Generator)"]
-        ExamsComp["ExamsComponent\n(Exam List & Scheduling)"]
-        BuilderComp["ExamBuilderComponent\n(Question Constructor)"]
-    end
-
-    subgraph Live Mission Control
-        HubComp["ActiveExamsHubComponent\n(Multi-Exam Cockpit)"]
-        MonitorComp["MonitorComponent\n(3-Pane Dispatcher Cockpit)"]
-        TimelineComp["Interactive Timeline Scrubber\n(Multi-Chunk Video Player)"]
-    end
-
-    subgraph Archive & Compliance
-        ReportsComp["ReportsHubComponent\n(Printable PDF Protocols)"]
-        ViolationDetailComp["ViolationDetailComponent\n(Evidence Image Inspection)"]
-    end
-
-    Router --> HubComp
-    Router --> MonitorComp
-    Router --> ReportsComp
-    Router --> StudentsComp
-
-    MonitorComp --> SignalRSvc
-    MonitorComp --> TimelineComp
-    MonitorComp --> ExamSvc
-    ReportsComp --> ReportSvc
-```
+<Mermaid source={"graph TD\n    subgraph Routing & Guards\n        Router[\"Angular App Router\\n(app.routes.ts)\"]\n        AuthGuard[\"AuthGuard (JWT Token Validation)\"]\n    end\n\n    subgraph Service Tier\n        AuthSvc[\"AuthService (Session Token Storage)\"]\n        SignalRSvc[\"SignalRService (WSS /hubs/exam-monitor)\"]\n        ExamSvc[\"ExamService (REST Endpoints)\"]\n        StudentSvc[\"StudentService (Group & Roster Logic)\"]\n        ReportSvc[\"ReportService (Protocol Generation)\"]\n    end\n\n    subgraph User & Exam Setup Modules\n        StudentsComp[\"StudentsComponent\\n(Group Filtering & Rosters)\"]\n        AddStudentComp[\"AddStudentComponent\\n(Auto Credential Generator)\"]\n        ExamsComp[\"ExamsComponent\\n(Exam List & Scheduling)\"]\n        BuilderComp[\"ExamBuilderComponent\\n(Question Constructor)\"]\n    end\n\n    subgraph Live Mission Control\n        HubComp[\"ActiveExamsHubComponent\\n(Multi-Exam Cockpit)\"]\n        MonitorComp[\"MonitorComponent\\n(3-Pane Dispatcher Cockpit)\"]\n        TimelineComp[\"Interactive Timeline Scrubber\\n(Multi-Chunk Video Player)\"]\n    end\n\n    subgraph Archive & Compliance\n        ReportsComp[\"ReportsHubComponent\\n(Printable PDF Protocols)\"]\n        ViolationDetailComp[\"ViolationDetailComponent\\n(Evidence Image Inspection)\"]\n    end\n\n    Router --> HubComp\n    Router --> MonitorComp\n    Router --> ReportsComp\n    Router --> StudentsComp\n\n    MonitorComp --> SignalRSvc\n    MonitorComp --> TimelineComp\n    MonitorComp --> ExamSvc\n    ReportsComp --> ReportSvc"} />
 
 ---
 
@@ -63,18 +26,11 @@ graph TD
 
 The core monitoring view is organized into a high-density, three-pane layout optimized for split-second situational awareness:
 
-```mermaid
-graph LR
-    subgraph 3-Pane Proctor Cockpit Layout
-        P1["Left Pane: Candidate Card\n• Student Name & Group\n• System OS & Hardware Status\n• Live Latency & Heartbeat\n• Current Score / Integrity %"]
-        P2["Center Pane: Media Auditing\n• Multi-Chunk HTML5 Player\n• Frame-accurate timeline scrubber\n• Clickable violation marker chips\n• Force Disqualification action"]
-        P3["Right Pane: Real-Time Stream\n• Live SignalR violation toasts\n• Severity badges (Critical/Warn)\n• Evidence screenshot thumbnails\n• Audio alert chime toggle"]
-    end
-```
+<Mermaid source={"graph LR\n    subgraph 3-Pane Proctor Cockpit Layout\n        P1[\"Left Pane: Candidate Card\\n• Student Name & Group\\n• System OS & Hardware Status\\n• Live Latency & Heartbeat\\n• Current Score / Integrity %\"]\n        P2[\"Center Pane: Media Auditing\\n• Multi-Chunk HTML5 Player\\n• Frame-accurate timeline scrubber\\n• Clickable violation marker chips\\n• Force Disqualification action\"]\n        P3[\"Right Pane: Real-Time Stream\\n• Live SignalR violation toasts\\n• Severity badges (Critical/Warn)\\n• Evidence screenshot thumbnails\\n• Audio alert chime toggle\"]\n    end"} />
 
 ### Dynamic Multi-Chunk Timeline Player
-Because video is recorded and uploaded in discrete 60-second `.mp4` chunks to ensure fault tolerance, the web player implements a continuous virtual timeline:
-1. **Manifest Ingestion:** Calls `GET /api/videoupload/{sessionId}/chunks` to retrieve all uploaded segments and compute total exam elapsed time:
+Because video is recorded and uploaded in discrete 60-second `.mp4` chunks, the web player implements a continuous virtual timeline:
+1. **Manifest Ingestion:** Calls `GET /api/video/{sessionId}/chunks` to retrieve all uploaded segments and compute total exam elapsed time:
 ```text
 Total_Duration = SUM(chunk_duration_k)
 ```
@@ -83,8 +39,15 @@ Total_Duration = SUM(chunk_duration_k)
 k = floor(target_time / 60.0)
 t_local = target_time mod 60.0
 ```
-3. **Seamless Chunk Switching:** Automatically swaps the HTML5 `<video>` element source to `chunk_k.mp4` and sets `currentTime = t_local`.
-4. **Violation Overlay Markers:** Violations fetched from `GET /api/violations/session/{id}` are rendered as colored pins across the progress bar (Red for Critical, Yellow for Warning). Clicking any pin instantly seeks the video to that exact second.
+3. **Seamless Chunk Switching:** Automatically swaps the HTML5 `<video>` element source to `/api/video/{sessionId}/{k}` (which supports HTTP byte-range streaming) and sets `currentTime = t_local`.
+4. **Playback Speeds:** Supports 1×, 1.5×, and 2× playback speed controls.
+5. **Violation Overlay Markers:** Violations fetched from `GET /api/Violations/by-session/{sessionId}` are rendered as colored pins across the progress bar (Red for Critical, Yellow for Warning). Clicking any pin instantly seeks the video to the exact second of the violation.
+
+### Live Alert Feed
+The monitor panel **polls** `GET /api/Violations/unreviewed` every **8 seconds**. When new violations arrive:
+* The proctor is notified via alert toast
+* Clicking an alert automatically selects the student, loads the correct video chunk, and seeks to the exact violation timestamp
+* The proctor can then confirm, reject (false positive), or send a warning via `ViolationDetailComponent`
 
 ---
 
@@ -106,3 +69,7 @@ At the conclusion of an exam, examiners can generate an official, tamper-evident
 * **Automated Scoring Breakdown:** Compiles final test answers, passing thresholds, and net integrity deductions.
 * **Chronological Anomaly Log:** Formats all flagged incidents with exact timestamps, AI confidence percentages, and proctor notes.
 * **Print-Optimized Layout:** Standard CSS `@media print` rules strip out web navigation, ensuring clean pagination when printed to paper or saved as a PDF document.
+
+## 6.5 Shared examiner workflow
+
+Development and production use the same panel, real accounts, examination data, monitoring and reports. There are no TEST badges, special attempt filters or development data banners. The local development menu belongs to the native client and does not alter examiner decisions or manufacture evidence.

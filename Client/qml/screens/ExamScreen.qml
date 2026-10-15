@@ -11,7 +11,7 @@ Page {
     property bool isLoaded:       false
     property var  questions:      ExamVM.questions
     property int  currentIndex:   0
-    property int  totalSeconds:   ExamVM.durationSeconds > 0 ? ExamVM.durationSeconds : 1800
+    property int  totalSeconds:   ExamVM.durationSeconds
     property var  answers:        ({})  // { questionId: selectedIndex }
 
     // Таймер
@@ -21,12 +21,8 @@ Page {
         repeat:   true
         running:  isLoaded && root.totalSeconds > 0
         onTriggered: {
-            if (root.totalSeconds > 1) {
-                root.totalSeconds--
-            } else if (root.totalSeconds === 1) {
-                root.totalSeconds = 0
-                submitExam()
-            }
+            root.totalSeconds = ExamVM.durationSeconds
+            if (root.totalSeconds <= 0) submitExam()
         }
     }
 
@@ -36,6 +32,9 @@ Page {
         return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0")
     }
 
+    property bool resultSuccess: false
+    property string saveStatus: ""
+    property string loadError: ""
     property string resultMessage: ""
 
     function submitExam() {
@@ -47,15 +46,23 @@ Page {
         target: ExamVM
         function onExamLoaded() {
             root.questions    = ExamVM.questions
-            root.totalSeconds = ExamVM.durationSeconds > 0 ? ExamVM.durationSeconds : 1800
+            root.totalSeconds = ExamVM.durationSeconds
+            root.answers = ExamVM.savedAnswers
             root.isLoaded     = true
+            if (root.totalSeconds > 0) mainWindow.enterExamMode()
+            else submitExam()
         }
         function onSubmitFinished(success, message) {
+            resultSuccess = success
+            if (success) mainWindow.exitExamMode()
             resultMessage = message
             resultDialog.open()
         }
+        function onExamLoadFailed(message) { root.loadError = message }
+        function onAnswersSaved(success) { root.saveStatus = success ? "Відповіді збережено на сервері" : "Немає підтвердження збереження. Перевірте з’єднання." }
+        function onSessionTerminated() { mainWindow.exitExamMode(); resultSuccess = true; resultMessage = "Спробу завершено сервером або викладачем."; resultDialog.open() }
         function onProhibitedProcessAlert(processName) {
-            root.prohibitedAppAlert = "⚠️ УВАГА: Виявлено роботу забороненої програми (" + processName + ")! Порушення зафіксовано в системі."
+            root.prohibitedAppAlert = "⚠️ УВАГА: Виявлено роботу забороненої програми (" + processName + ")! Спостереження потребує перевірки викладача. Стан доставки показано окремо."
             appAlertTimer.restart()
         }
     }
@@ -68,11 +75,14 @@ Page {
         onTriggered: root.prohibitedAppAlert = ""
     }
 
+    Timer { interval: 5000; repeat: true; running: root.isLoaded && mainWindow.isExamActive; onTriggered: { ExamVM.saveAnswers(root.answers); ExamVM.heartbeat() } }
     Component.onCompleted: {
         ExamVM.loadExam()
     }
 
     ColumnLayout {
+        enabled: !ProcessVM.virtualizationBlocked
+        visible: !ProcessVM.virtualizationBlocked
         anchors.fill: parent
         anchors.margins: 40
         spacing: 16
@@ -100,6 +110,9 @@ Page {
             }
         }
 
+        Label { text: root.loadError; visible: text.length > 0; color: "#b91c1c"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Button { text: "Повторити підключення"; visible: root.loadError.length > 0; onClicked: { root.loadError = ""; ExamVM.loadExam() } }
+        Label { text: root.saveStatus; wrapMode: Text.WordWrap; Layout.fillWidth: true }
         // Топ-панель
         Rectangle {
             Layout.fillWidth: true
@@ -138,6 +151,11 @@ Page {
             }
         }
 
+        Label { text: mainWindow.analysisStatus; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Label { text: mainWindow.technicalStatus; visible: text.length > 0; color: "#b91c1c"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Label { text: mainWindow.uploadStatus; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Button { text: "Закрити клієнт"; visible: root.resultSuccess && !mainWindow.isExamActive; enabled: mainWindow.pendingVideoUploads === 0; onClicked: Qt.quit() }
+        Button { text: "Вийти зі збереженою чергою на цьому ПК"; visible: root.resultSuccess && !mainWindow.isExamActive && mainWindow.pendingVideoUploads > 0; onClicked: Qt.quit() }
         // Лічильник питань
         Label {
             text: "Питання " + (root.currentIndex + 1) +
@@ -156,6 +174,7 @@ Page {
 
             Label {
                 id: questionLabel
+                textFormat: Text.PlainText
                 anchors { fill: parent; margins: 20 }
                 text: root.questions.length > 0
                       ? root.questions[root.currentIndex].text
@@ -182,6 +201,7 @@ Page {
                            : []
 
                     delegate: RadioDelegate {
+                        enabled: mainWindow.isExamActive && !root.resultSuccess
                         width:         parent.width
                         text:          modelData.text
                         font.pixelSize: 15
@@ -197,6 +217,7 @@ Page {
                             let updated = Object.assign({}, root.answers);
                             updated[q.id] = modelData.orderIndex;
                             root.answers = updated;
+                            ExamVM.saveAnswers(root.answers);
                         }
                     }
                 }
@@ -285,7 +306,7 @@ Page {
             }
 
             Label {
-                text: "Відеоматеріали та протокол прокторингу передано до системи контролю."
+                text: "Стан передачі відеоматеріалів буде показано окремо після завершення."
                 font.pixelSize: 12
                 color: "#718096"
                 wrapMode: Text.WordWrap
@@ -293,6 +314,39 @@ Page {
             }
         }
 
-        onAccepted: root.examFinished()
+        onAccepted: { if (root.resultSuccess) root.examFinished(); else if (root.totalSeconds > 0) examTimer.running = true }
     }
+    Rectangle {
+        anchors.fill: parent
+        z: 100
+        color: "#FFF1F2"
+        visible: root.isLoaded && ProcessVM.virtualizationBlocked && !root.resultSuccess
+        MouseArea { anchors.fill: parent }
+        ColumnLayout {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 48, 720)
+            spacing: 20
+            Label {
+                text: "Виконання завдань заблоковано: віртуалізація"
+                font.pixelSize: 22
+                font.bold: true
+                color: "#991B1B"
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            Label {
+                text: "Виявлено активний гіпервізор, контейнерне середовище або неможливо завершити перевірку. Закрийте відповідне ПЗ та служби. Перевірка повторюється автоматично. Час іспиту та запис продовжуються."
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 150
+                clip: true
+                TextArea { text: ProcessVM.vmDetails; readOnly: true; wrapMode: TextEdit.Wrap; selectByMouse: true }
+            }
+            Button { text: "Завершити іспит і надіслати збережені відповіді"; onClicked: root.submitExam() }
+        }
+    }
+
 }

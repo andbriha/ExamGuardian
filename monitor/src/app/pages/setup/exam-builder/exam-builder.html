@@ -19,12 +19,22 @@
       <div class="input-group">
         <label>Дата та час початку <span class="required">*</span></label>
         <input type="datetime-local" [(ngModel)]="exam.startTime">
+        <label>Часовий пояс розкладу</label>
+        <select [(ngModel)]="exam.timeZoneId"><option value="Europe/Chisinau">Europe/Chisinau</option><option value="Europe/Kyiv">Europe/Kyiv</option><option value="UTC">UTC</option></select>
+        <small>Тривалість рахується від призначеного початку для всіх студентів. Пізній вхід не подовжує іспит.</small>
       </div>
       
       <div class="input-group">
         <label>Тривалість (хв) <span class="required">*</span></label>
-        <input type="number" [(ngModel)]="exam.durationMinutes" min="10" max="300">
+        <input type="number" [(ngModel)]="exam.durationMinutes" min="1" max="480">
       </div>
+      <div class="input-group"><label>Група учасників</label><input [(ngModel)]="exam.allowedGroup" placeholder="Порожньо — усі студенти"></div>
+      <div class="input-group"><label>Дозволених спроб</label><input type="number" [(ngModel)]="exam.maxAttempts" min="1" max="10"></div>
+      <div class="input-group"><label>Прохідний бал зі 100</label><input type="number" [(ngModel)]="exam.passingScore" min="0" max="100"></div>
+      <div class="input-group full"><label><input type="checkbox" [(ngModel)]="exam.allowSpeech"> Мовлення дозволене правилами іспиту</label></div>
+      <div class="input-group full"><label><input type="checkbox" [(ngModel)]="exam.flagHeadMovement"> Позначати тривалий поворот або нахил голови для перевірки</label></div>
+      <div class="input-group full"><label><input type="checkbox" [(ngModel)]="exam.allowBook"> Книги дозволені</label><label><input type="checkbox" [(ngModel)]="exam.allowLaptop"> Додатковий ноутбук дозволений</label></div>
+      <p class="input-group full">Сигнали допомагають перевірці. Вони не змінюють оцінку за відповіді та не є автоматичним висновком про порушення.</p>
     </div>
   </div>
 
@@ -106,7 +116,7 @@
       @if (saving) {
         <span class="spinner"></span> Збереження...
       } @else {
-        Зберегти та активувати іспит
+        Зберегти іспит за розкладом
       }
     </button>
   </div>

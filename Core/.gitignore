@@ -8,8 +8,6 @@ bin/
 obj/
 *.xml
 
-# Migration files
-Migrations/
 
 # HTTP requests (e.g., for API testing in Visual Studio or Rider)
 *.http

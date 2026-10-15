@@ -1,4 +1,4 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule, Router } from '@angular/router';
 import { StudentService, StudentDto } from '../../../services/student.service';
@@ -10,7 +10,7 @@ import { StudentService, StudentDto } from '../../../services/student.service';
   templateUrl: './student-detail.html',
   styleUrl: './student-detail.css'
 })
-export class StudentDetailComponent implements OnInit {
+export class StudentDetailComponent implements OnInit, OnDestroy {
   student: StudentDto | null = null;
   photoUrl: string = '';
   isLoading = true;
@@ -33,7 +33,7 @@ export class StudentDetailComponent implements OnInit {
     this.studentService.getById(id).subscribe({
       next: (data) => {
         this.student = data;
-        this.photoUrl = `${this.studentService.getPhotoUrl(id)}?t=${Date.now()}`;
+        this.studentService.getPhoto(id).subscribe({ next: blob => { this.photoUrl = URL.createObjectURL(blob); this.cdr.detectChanges(); }, error: () => {} });
         this.isLoading = false;
         this.cdr.detectChanges();
       },
@@ -44,6 +44,8 @@ export class StudentDetailComponent implements OnInit {
       }
     });
   }
+
+  ngOnDestroy() { if (this.photoUrl) URL.revokeObjectURL(this.photoUrl); }
 
   deleteStudent = () => {
     if (!this.student) return;

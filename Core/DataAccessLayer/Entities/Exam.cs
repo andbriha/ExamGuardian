@@ -1,4 +1,4 @@
-﻿
+
 namespace DataAccessLayer.Entities;
 
 public class Exam
@@ -11,6 +11,14 @@ public class Exam
 
     public DateTime? ScheduledStartTime { get; set; }
     public int DurationMinutes { get; set; }
+    public string? AllowedGroup { get; set; }
+    public int MaxAttempts { get; set; } = 1;
+    public int PassingScore { get; set; } = 60;
+    public bool AllowSpeech { get; set; }
+    public bool FlagHeadMovement { get; set; } = true;
+    public string AllowedObjectsJson { get; set; } = "[]";
+
+
 
     public Guid CreatorId { get; set; }
     public virtual User Creator { get; set; } = null!;

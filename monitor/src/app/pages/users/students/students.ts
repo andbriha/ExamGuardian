@@ -62,7 +62,7 @@ export class StudentsComponent implements OnInit {
       error: (err) => {
         this.isLoading = false;
         if (err.status === 401 || err.status === 403) {
-          this.errorMessage = 'Для перегляду бази студентів потрібно авторизуватися як викладач (admin / password12345).';
+          this.errorMessage = 'Для перегляду бази студентів потрібно авторизуватися як викладач .';
         } else {
           this.errorMessage = 'Помилка завантаження списку студентів: ' + (err.error?.message ?? err.message);
         }
@@ -98,5 +98,5 @@ export class StudentsComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
-  toggleStatus = (s: StudentView) => s.isActive = !s.isActive;
+
 }

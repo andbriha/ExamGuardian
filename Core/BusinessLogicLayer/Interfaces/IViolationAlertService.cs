@@ -7,7 +7,8 @@ namespace BusinessLayer.Interfaces
         Task<ViolationAlertDto?> GetByIdAsync(int violationId);
         Task<IEnumerable<ViolationAlertDto>> GetBySessionAsync(int sessionId);
         Task<IEnumerable<ViolationAlertDto>> GetUnreviewedAsync();
+        Task<IEnumerable<ViolationAlertDto>> GetUnreviewedForSessionsAsync(List<int> ids);
         Task<ViolationAlertDto> CreateAsync(CreateViolationDto dto);
-        Task MarkAsReviewedAsync(int violationId);
+        Task ReviewAsync(int violationId, Guid reviewerId, string decision, string? notes);
     }
 }

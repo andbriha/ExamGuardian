@@ -14,23 +14,15 @@ Page {
     // 1: Virtual camera error
     // 2: Waiting for server / Fetching task
     // 3: Executing task
-    // 4: Server verification
     // 5: Success
     // 6: Error state (requires retry)
+    property string audioStatus: "Мікрофон: очікування"
     property int step: 0
+    property int actionNumber: 0
     property string serverInstruction: ""
+    property string verificationPhase: "prepare"
     property string errorMessage: ""
     property string progressHint: "Подивіться прямо в камеру"
-
-    Timer {
-        id: autoVerifyTimer
-        interval: 1400
-        repeat: true
-        running: step === 3
-        onTriggered: {
-            MediaVM.simulateUserActionCompleted()
-        }
-    }
 
     Timer {
         id: autoProceedTimer
@@ -38,17 +30,23 @@ Page {
         repeat: false
         running: false
         onTriggered: {
-            mediaPage.mediaCheckPassed()
+            if (mediaPage.StackView.status === StackView.Active) mediaPage.mediaCheckPassed()
         }
     }
 
     Connections {
+        enabled: mediaPage.StackView.status === StackView.Active || mediaPage.StackView.status === StackView.Activating
         target: MediaVM
+        function onVerificationAudioStatus(message) { audioStatus = message }
 
+        function onVerificationError(message) { step = 6; errorMessage = message; progressHint = "" }
+        function onVerificationPhaseChanged(phase) { verificationPhase = phase }
         function onInstructionReceived(instruction) {
+            verificationPhase = "prepare"
+            actionNumber += 1
             serverInstruction = instruction
             errorMessage = ""
-            progressHint = "Подивіться прямо в камеру, потім: " + instruction
+            progressHint = "Спочатку дивіться прямо та розслабте обличчя. Дочекайтеся підказки."
             step = 3 // Режим виконання завдання
         }
 
@@ -59,9 +57,6 @@ Page {
                 progressHint = "✅ Верифікацію успішно пройдено! Переходимо до іспиту..."
                 autoProceedTimer.start()
             } else {
-                if (step === 4) {
-                    step = 3
-                }
                 progressHint = message
             }
         }
@@ -70,6 +65,8 @@ Page {
             progressHint = hint
         }
     }
+
+    Component.onDestruction: MediaVM.stopVerificationSession()
 
     Component.onCompleted: {
         mainWindow.turnOnCamera()
@@ -120,12 +117,15 @@ Page {
                 anchors.right: parent.right
                 height: 60
                 color: "#CC000000" // Напівпрозорий чорний
-                visible: step === 3 || step === 4
+                visible: step === 3
 
                 Label {
                     anchors.centerIn: parent
-                    text: step === 3 ? "📝 Завдання: " + serverInstruction : "⏳ Нейромережа аналізує кадр..."
-                    color: step === 3 ? "#FFEB3B" : "white"
+                    width: parent.width - 24
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                    text: "📝 Дія " + actionNumber + "/3: " + (verificationPhase === "prepare" ? "Спочатку дивіться прямо в камеру" : verificationPhase === "return" ? "Поверніться прямо та розслабте обличчя" : serverInstruction)
+                    color: "#FFEB3B"
                     font.pixelSize: 16
                     font.bold: true
                 }
@@ -135,7 +135,7 @@ Page {
         // Банер помилки верифікації
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: visible ? 60 : 0
+            Layout.preferredHeight: visible ? Math.max(76, errorDetails.implicitHeight + 24) : 0
             visible: step === 6
             color: "#FFEBEE"
             border.color: "#EF9A9A"
@@ -155,6 +155,7 @@ Page {
                 }
 
                 Text {
+                    id: errorDetails
                     Layout.fillWidth: true
                     text: errorMessage
                     color: "#B71C1C"
@@ -175,6 +176,7 @@ Page {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             step = 2
+                            actionNumber = 0
                             errorMessage = ""
                             MediaVM.startVerificationSession() // Запит нового челенджу від бекенду
                         }
@@ -195,7 +197,7 @@ Page {
         // Банер підказки (progress hint)
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: visible ? 50 : 0
+            Layout.preferredHeight: visible ? 76 : 0
             visible: progressHint.length > 0 && step !== 1
             color: step === 5 ? "#E8F5E9" : "#FFF8E1"
             border.color: step === 5 ? "#81C784" : "#FFD54F"
@@ -204,6 +206,9 @@ Page {
 
             Label {
                 anchors.centerIn: parent
+                width: parent.width - 24
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
                 text: (step === 5 ? "" : "💡 ") + progressHint
                 color: step === 5 ? "#2E7D32" : "#F57F17"
                 font.pixelSize: 14
@@ -211,48 +216,21 @@ Page {
             }
         }
 
-        // Головна кнопка управління
-        Button {
+        Label {
             Layout.fillWidth: true
-            Layout.preferredHeight: 50
-            highlighted: true
-            visible: step !== 1 && step !== 6
-
-            text: {
-                if (step === 0) return "Connect to proctoring server"
-                if (step === 2) return "Fetching task..."
-                if (step === 3) return "I have completed the task"
-                if (step === 4) return "Verifying identity & liveness..."
-                if (step === 5) return "✅ Start Exam"
-                return ""
-            }
-
-            enabled: step === 0 || step === 3 || step === 5
-
-            background: Rectangle {
-                color: parent.enabled ? (step === 5 ? "#2E7D32" : "#0288D1") : "#BDBDBD"
-                radius: 5
-            }
-
-            contentItem: Text {
-                text: parent.text
-                font.bold: true
-                color: "white"
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            onClicked: {
-                if (step === 0) {
-                    step = 2
-                    MediaVM.startVerificationSession() // Новий метод, що ініціює подвійну перевірку
-                } else if (step === 3) {
-                    step = 4
-                    MediaVM.simulateUserActionCompleted()
-                } else if (step === 5) {
-                    mediaPage.mediaCheckPassed()
-                }
-            }
+            text: step === 2 ? "Підключаємо перевірку…" : "Кадри та звук аналізуються автоматично. Натискати нічого не потрібно."
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            color: "#546E7A"
+            visible: step === 2 || step === 3
+        }
+        Label {
+            Layout.fillWidth: true
+            text: mediaPage.audioStatus
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            color: "#546E7A"
+            visible: step === 3
         }
     }
 }

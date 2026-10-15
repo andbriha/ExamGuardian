@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 using DataAccessLayer.Entities;
@@ -10,6 +10,8 @@ namespace DataAccessLayer.Configurations
         public void Configure(EntityTypeBuilder<ViolationAlert> builder)
         {
             builder.HasKey(va => va.Id);
+            builder.HasIndex(va => va.EventId).IsUnique().HasFilter("\"EventId\" <> '00000000-0000-0000-0000-000000000000'");
+            builder.HasIndex(va => new { va.ExamSessionId, va.RelativeTimestampSeconds });
             builder.Property(va => va.ViolationType).IsRequired().HasMaxLength(50);
             builder.Property(va => va.Timestamp).HasDefaultValueSql("NOW()");
 

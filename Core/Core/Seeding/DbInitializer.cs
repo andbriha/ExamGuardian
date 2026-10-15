@@ -14,24 +14,29 @@ public static class DbInitializer
 
 
         context.Database.Migrate();
+        var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
 
         if (!context.Users.Any(u => u.Role == SystemRoles.Examiner))
         {
+            var login = config["Bootstrap:ExaminerLogin"];
+            var password = config["Bootstrap:ExaminerPassword"];
+            if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(password) || password.Length < 12)
+                throw new InvalidOperationException("Set Bootstrap__ExaminerLogin and Bootstrap__ExaminerPassword (at least 12 characters) for the first examiner.");
             context.Users.Add(new User
             {
                 Id = Guid.NewGuid(),
                 FullName = "Chief Examiner",
-                Login = "admin",
+                Login = login,
 
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("password12345"),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
                 Role = SystemRoles.Examiner
             });
 
             context.SaveChanges();
         }
 
-        if (!context.Exams.Any())
+        if (config.GetValue<bool>("Seed:DemoExam") && !context.Exams.Any())
         {
             var adminUser = context.Users.FirstOrDefault(u => u.Role == SystemRoles.Examiner);
             var exam = new Exam

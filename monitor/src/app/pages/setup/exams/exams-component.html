@@ -4,7 +4,7 @@
       <h2>📚 Мої іспити</h2>
       <p class="subtitle">Управління контрольними заходами та моніторинг сесій</p>
     </div>
-    
+
     <button class="btn-primary" routerLink="/create-exam">
       + Створити іспит
     </button>
@@ -30,10 +30,10 @@
     <div class="exams-grid">
       @for (exam of exams; track exam.id) {
         <div class="exam-card card">
-          
+
           <div class="card-top">
             <div class="status-badge" [ngClass]="exam.status">
-              {{ exam.status === 'active' ? '🟢 Активний' : 
+              {{ exam.status === 'active' ? '🟢 Активний' :
                  exam.status === 'upcoming' ? '⏳ Заплановано' : '⚪ Завершено' }}
             </div>
             <div class="exam-actions">
@@ -45,11 +45,11 @@
           <div class="card-body">
             <h3 class="exam-title">{{ exam.title }}</h3>
             <p class="exam-desc">{{ exam.description || 'Немає опису' }}</p>
-            
+
             <div class="exam-meta">
               <div class="meta-item">
                 <span class="icon">📅</span>
-                <span>{{ exam.startTime | date:'dd.MM.yyyy HH:mm' }}</span>
+                <span>Початок: {{ exam.startTime ? formatStart(exam) : '—' }} ({{ exam.timeZoneId || 'Europe/Chisinau' }})<br>Кінець: {{ exam.startTime ? formatEnd(exam) : '—' }}</span>
               </div>
               <div class="meta-item">
                 <span class="icon">⏱</span>
@@ -63,7 +63,7 @@
           </div>
 
           <div class="card-footer">
-            <button class="btn-secondary full-width" 
+            <button class="btn-secondary full-width"
                     [routerLink]="['/monitor', exam.id]">
               👁 Переглянути сесії (Прокторинг)
             </button>

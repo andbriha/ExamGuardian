@@ -95,9 +95,6 @@
 
               <div class="sic-actions">
                 <a [routerLink]="['/student', s.id]" class="btn-card-action">Профіль ➔</a>
-                <button class="btn-ghost-sm" (click)="toggleStatus(s)">
-                  {{ s.isActive ? 'Блокувати' : 'Активувати' }}
-                </button>
               </div>
             </div>
           }
@@ -145,7 +142,6 @@
               {{ s.isActive ? 'Активний' : 'Заблокований' }}
             </td>
             <td>
-              <button class="btn-ghost" (click)="toggleStatus(s)">Змінити статус</button>
             </td>
           </tr>
         }

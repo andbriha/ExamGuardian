@@ -51,6 +51,7 @@ export class StudentService {
     return this.http.delete<void>(`${this.apiUrl}/${id}`);
   }
 
+  getPhoto(id: string): Observable<Blob> { return this.http.get(`${this.apiUrl}/${id}/photo`, { responseType: "blob" }); }
   getPhotoUrl(id: string): string {
     return `${this.apiUrl}/${id}/photo`;
   }

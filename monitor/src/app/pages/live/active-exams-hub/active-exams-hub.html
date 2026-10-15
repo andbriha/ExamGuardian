@@ -1,7 +1,7 @@
 <div class="hub-wrap">
   <div class="header">
     <h2>📡 Live Моніторинг</h2>
-    <p>Оберіть активний іспит для підключення до потоку прокторингу</p>
+    <p>Оберіть активний іспит для перегляду стану спроб та матеріалів</p>
   </div>
 
   <div *ngIf="isLoading" style="text-align: center; padding: 40px; color: #64748b;">
@@ -17,16 +17,16 @@
       <div class="live-card">
         <div class="card-top">
           <div class="live-badge">
-            <span class="pulse-dot"></span> LIVE
+            <span class="pulse-dot"></span> АКТИВНІ СПРОБИ
           </div>
           <span class="time">{{ exam.startTime }}</span>
         </div>
         
         <h3 class="title">{{ exam.title }}</h3>
-        <p class="group">Опис / Група: <strong>{{ exam.groupName }}</strong></p>
+        <p class="group">Група: <strong>{{ exam.groupName }}</strong></p>
         
         <div class="stats-box">
-          <span class="stat-label">Студентів у мережі:</span>
+          <span class="stat-label">Незавершених спроб:</span>
           <span class="stat-value">{{ exam.activeStudents }} / {{ exam.totalStudents }}</span>
         </div>
         
@@ -39,7 +39,7 @@
     @if (activeExams.length === 0) {
       <div class="empty-state">
         <span class="icon">☕</span>
-        <p>Зараз немає створених іспитів</p>
+        <p>Зараз немає іспитів із незавершеними спробами</p>
       </div>
     }
   </div>

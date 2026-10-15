@@ -1,4 +1,4 @@
-﻿namespace BusinessLayer.DTOs.Exam;
+namespace BusinessLayer.DTOs.Exam;
 
 public class ExamDto
 {
@@ -8,7 +8,18 @@ public class ExamDto
     public string RawContent { get; set; } = null!;
     public DateTime CreatedAt { get; set; }
     public DateTime? ScheduledStartTime { get; set; }
+    public DateTime ScheduledEndTime { get; set; }
+    public DateTime ServerTimeUtc { get; set; }
+    public string TimeZoneId { get; set; } = "UTC";
+    public int QuestionCount { get; set; }
     public int DurationMinutes { get; set; }
+    public string? AllowedGroup { get; set; }
+    public int MaxAttempts { get; set; } = 1;
+    public int PassingScore { get; set; } = 60;
+    public bool AllowSpeech { get; set; }
+    public bool FlagHeadMovement { get; set; } = true;
+    public List<string> AllowedObjects { get; set; } = new();
+
     public Guid CreatorId { get; set; }
 
     public List<QuestionDto> Questions { get; set; } = new();
