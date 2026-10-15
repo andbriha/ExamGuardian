@@ -1,0 +1,199 @@
+<div class="monitor-wrap">
+  <div class="header">
+    <div class="h-left">
+      <h2>🔴 Диспетчерська моніторингу: {{ exam?.title || ('Іспит #' + examId) }}</h2>
+      <div class="h-sub">Стан сесій, сигнали для перевірки та записані відеофрагменти. Оновлення кожні 8 секунд.</div>
+    </div>
+    <div class="stats">
+      <span>Учасників: <strong>{{ students.length }}</strong></span>
+      <span>Сигналів до перевірки: <strong style="color: #ef4444;">{{ alerts.length }}</strong></span>
+    </div>
+  </div>
+
+  <div class="grid-layout">
+    <!-- 1. Left Panel: Students & Sessions -->
+    <div class="panel students-panel">
+      <h3>👥 Сесії учасників</h3>
+      <div class="list">
+        @for (s of students; track s.sessionId) {
+          <div class="student-card" 
+               [class.selected]="selectedSession?.sessionId === s.sessionId"
+               (click)="selectSession(s)">
+            <div class="s-top">
+              <div class="s-info">
+                <span class="dot" [class]="s.status"></span>
+                <span class="name">{{ s.name }}</span>
+              </div>
+              <span class="badge-v" *ngIf="s.violationCount > 0">{{ s.violationCount }} ⚠️</span>
+            </div>
+            <div class="s-bottom">
+              <span class="progress">Сесія #{{ s.sessionId }} &bull; {{ s.progress }}<br>{{ s.analysisStatus }}. {{ s.audioStatus }}.<br>{{ evidenceLabel(s.evidenceStatus) }}</span>
+              <span class="score" *ngIf="s.score !== undefined && s.progress === 'Завершено'">{{ s.score }}/100</span>
+            </div>
+          </div>
+        }
+        @if (students.length === 0) {
+          <div class="empty-msg">
+            Немає сесій цього іспиту
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- 2. Center Panel: Video Player & Timeline -->
+    <div class="panel player-panel">
+      <div class="pp-header">
+        <div>
+          <h3>📹 Відеозапис: {{ selectedSession ? selectedSession.name : 'Оберіть сесію' }}</h3>
+          <span class="session-meta" *ngIf="selectedSession">
+            Сесія #{{ selectedSession.sessionId }} &bull; Спостережень у сесії: {{ sessionViolations.length }}
+          </span>
+        </div>
+        <div *ngIf="selectedSession && sessionViolations.length > 0">
+          <a [routerLink]="['/violation', sessionViolations[0].id]" class="btn-inspect-link">
+            🔍 Повний розбір ➔
+          </a>
+        </div>
+      </div>
+
+      <div *ngIf="previewUrl"><h3>Останній кадр камери</h3><img [src]="previewUrl" alt="Останній отриманий кадр вибраної сесії" style="max-width:100%;max-height:240px"><p>Час отримання: {{ previewCapturedAt ? (previewCapturedAt | date:'dd.MM.yyyy HH:mm:ss') : 'невідомий' }}. Кадр може бути застарілим при втраті зв’язку.</p></div>
+      <button *ngIf="selectedSession?.progress === 'Складання'" (click)="terminateSelected()">Припинити спробу</button>
+      <div class="stream-selector"><button class="cs-btn" [class.active]="selectedStream === 'camera'" (click)="changeStream('camera')">Запис камери</button><button class="cs-btn" [class.active]="selectedStream === 'screen'" (click)="changeStream('screen')">Запис екрана</button></div>
+      <p class="evidence-error" *ngIf="evidenceError" role="alert">{{ evidenceError }}</p>
+      <!-- Chunk selector -->
+      <div class="chunk-selector" *ngIf="videoChunks.length > 1">
+        <span class="cs-label">Фрагменти:</span>
+        <div class="cs-list">
+          @for (c of videoChunks; track c.chunkIndex) {
+            <button class="cs-btn" 
+                    [class.active]="selectedChunkIndex === c.chunkIndex"
+                    (click)="selectChunk(c.chunkIndex)">
+              Чанк #{{ c.chunkIndex }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <!-- Video element -->
+      <div class="video-box">
+        <div class="video-container" *ngIf="hasVideo">
+          <video #dispatcherVideo
+                 [src]="currentVideoUrl"
+                 (loadedmetadata)="onMetadataLoaded()"
+                     (error)="onVideoError()"
+                 (timeupdate)="onTimeUpdate()"
+                 (play)="isPlaying = true"
+                 (pause)="isPlaying = false"
+                 playsinline
+                 class="main-video">
+          </video>
+
+          <!-- Marker Overlay on Video -->
+          <div class="video-overlay" *ngIf="activeViolationMarker">
+            <div class="video-overlay-dot"></div>
+            <span>{{ getViolationLabel(activeViolationMarker.violationType) }} &bull; {{ confidenceLabel(activeViolationMarker) }}</span>
+          </div>
+
+          <div class="video-timestamp">
+            {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+          </div>
+        </div>
+
+        <div class="video-empty" *ngIf="!hasVideo">
+          <div class="ve-content">
+            <span style="font-size: 32px;">🎥</span>
+            <p>{{ isLoadingVideo ? 'Завантаження відеопотоку...' : 'Відео ще не надійшло або очікує завершення передачі чанку' }}</p>
+            <span style="font-size: 12px; color: #94a3b8;">Чанки надсилаються щохвилини під час активного іспиту</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline with Markers -->
+      <div class="controls-panel" *ngIf="hasVideo">
+        <div class="timeline-container">
+          <div class="timeline-track" (click)="onTimelineClick($event)">
+            <div class="timeline-progress" [style.width.%]="(currentTime / (duration || 60)) * 100"></div>
+            <div class="timeline-thumb" [style.left.%]="(currentTime / (duration || 60)) * 100"></div>
+
+            <!-- Violation pins -->
+            @for (v of getViolationsInCurrentChunk(); track v.id) {
+              <div class="timeline-pin"
+                   [class.active]="activeViolationMarker?.id === v.id"
+                   [style.left.%]="getMarkerPositionPercent(v)"
+                   (click)="$event.stopPropagation(); seekToViolation(v)">
+                <div class="pin-popup">
+                  {{ formatTime(v.relativeTimestampSeconds % 60) }} &bull; {{ getViolationLabel(v.violationType) }}
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Controls Bar -->
+        <div class="controls-bar">
+          <div class="cb-left">
+            <button class="ctrl-btn play-btn" (click)="togglePlay()">
+              {{ isPlaying ? '⏸ Пауза' : '▶ Відтворити' }}
+            </button>
+            <span class="ctrl-time">
+              {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+            </span>
+          </div>
+
+          <div class="cb-right">
+            <span class="speed-label">Швидкість:</span>
+            <button class="speed-btn" [class.active]="playbackRate === 1.0" (click)="setSpeed(1.0)">1x</button>
+            <button class="speed-btn" [class.active]="playbackRate === 1.5" (click)="setSpeed(1.5)">1.5x</button>
+            <button class="speed-btn" [class.active]="playbackRate === 2.0" (click)="setSpeed(2.0)">2x</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Session Violations List -->
+      <div class="quick-violations" *ngIf="sessionViolations.length > 0">
+        <h4>Хронологія спостережень ({{ sessionViolations.length }}):</h4>
+        <div class="qv-tags">
+          @for (v of sessionViolations; track v.id) {
+            <button class="qv-tag" 
+                    [class.active]="activeViolationMarker?.id === v.id"
+                    (click)="seekToViolation(v)">
+              <span class="qvt-time">{{ formatTime(v.relativeTimestampSeconds) }}</span>
+              <span class="qvt-type">{{ getViolationLabel(v.violationType) }}</span>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Right Panel: AI Feed -->
+    <div class="panel alert-panel">
+      <h3>Спостереження до перевірки</h3>
+      <div class="list">
+        @for (a of alerts; track a.id) {
+          <div class="alert-card" (click)="onAlertClicked(a)">
+            <div class="a-top">
+              <span class="time">{{ a.time }} &bull; {{ formatTime(a.relativeSec) }}</span>
+              <span class="conf">{{ confidenceLabel(a.raw) }}</span>
+            </div>
+            <div class="a-title">{{ a.type }}</div>
+            @if (getViolationDetail(a.raw)) {
+              <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">{{ getViolationDetail(a.raw) }}</div>
+            }
+            <div class="a-student">{{ a.studentName }}</div>
+            <div class="a-actions">
+              <button class="btn-seek">▶ Дивитись у плеєрі</button>
+              <a [routerLink]="['/violation', a.id]" class="btn-detail-link" (click)="$event.stopPropagation()">
+                Деталі ➔
+              </a>
+            </div>
+          </div>
+        }
+        @if (alerts.length === 0) {
+          <div style="padding: 32px; text-align: center; color: #64748b;">
+            Немає нових спостережень до перевірки. Стан аналізу та повнота записів показані для кожної спроби.
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

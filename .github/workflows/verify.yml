@@ -1,0 +1,79 @@
+name: Verify
+on: [push, pull_request]
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web-site/package-lock.json
+      - run: npm ci
+      - run: npm run check:diagrams
+      - run: npm run build
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet build Core/Core.sln --configuration Release
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Isolated PostgreSQL/API contracts
+        shell: pwsh
+        run: ./tests/run-core-contracts.ps1
+  monitor:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: monitor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: monitor/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test -- --watch=false --browsers=ChromeHeadless
+  inference-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m compileall -q Inference/api Inference/core Inference/models
+      - run: pip install -r Inference/requirements-test.txt
+      - run: python -m unittest discover -s tests -v
+        working-directory: Inference
+  qt-linux-build:
+    strategy:
+      matrix:
+        flavor: [development, production]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.1'
+          modules: 'qtmultimedia'
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev
+      - run: cmake -S Client -B Client/build-ci -DCMAKE_BUILD_TYPE=Release -DEXAMGUARDIAN_BUILD_TESTS=ON -DEXAMGUARDIAN_FLAVOR=${{ matrix.flavor }}
+      - run: cmake --build Client/build-ci --parallel 2
+      - run: QT_QPA_PLATFORM=offscreen Client/build-ci/appClient --smoke-test
+      - run: ctest --test-dir Client/build-ci --output-on-failure
+
+      - name: Production resource boundary
+        if: matrix.flavor == 'production'
+        run: QT_QPA_PLATFORM=offscreen Client/build-ci/appClient --verify-production

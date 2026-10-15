@@ -1,0 +1,261 @@
+<div class="violation-page">
+  <div class="topbar">
+    <div class="tb-left" style="display:flex;align-items:center">
+      <div class="tb-logo">
+        <div class="tb-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C16.5 22.15 20 17.25 20 12V6l-8-4z"/></svg>
+        </div>
+        <span class="tb-name">Exam<span>Guardian</span></span>
+      </div>
+      <div class="tb-sep"></div>
+      <span class="tb-exam">{{ studentInfo.examName }} · {{ studentInfo.group }}</span>
+    </div>
+    <div class="tb-right">
+      <div class="pill pill-red">
+        <div style="width:6px;height:6px;border-radius:50%;background:#ef4444"></div>
+        Порушення #{{ violationId }}
+      </div>
+      <div class="pill pill-green">AI Core активний</div>
+      <div class="avatar">{{ studentInfo.initials }}</div>
+    </div>
+  </div>
+  
+  <div class="breadcrumb">
+    <a href="javascript:void(0)" (click)="goBack()">← Назад до моніторингу</a>
+    <span>›</span>
+    <span class="muted">{{ studentInfo.name }}</span>
+    <span>›</span>
+    <span style="color:#991b1b;font-weight:600">Детальний розбір відеофіксації</span>
+  </div>
+  
+  <div class="content">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Відеозапис сесії тестування
+          </div>
+          <span class="badge-danger" *ngIf="currentViolation">{{ getViolationLabel(currentViolation.violationType) }}</span>
+        </div>
+        <div class="card-body">
+          
+          <!-- Chunk Selector (if multiple chunks exist) -->
+          <div class="chunk-selector" *ngIf="videoChunks.length > 1">
+            <span class="cs-label">Відео-фрагменти (по 60 сек):</span>
+            <div class="cs-list">
+              @for (chunk of videoChunks; track chunk.chunkIndex) {
+                <button class="cs-btn" 
+                        [class.active]="selectedChunkIndex === chunk.chunkIndex"
+                        (click)="selectChunk(chunk.chunkIndex)">
+                  Чанк #{{ chunk.chunkIndex }} ({{ (chunk.chunkIndex - 1) * 60 }}с – {{ chunk.chunkIndex * 60 }}с)
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Real HTML5 Video Player Container -->
+          <div class="video-player-wrap">
+            <div class="video-container" *ngIf="hasVideo">
+              <video #videoPlayer
+                     [src]="currentVideoUrl"
+                     (loadedmetadata)="onMetadataLoaded()"
+                     (error)="onVideoError()"
+                     (timeupdate)="onTimeUpdate()"
+                     (play)="isPlaying = true"
+                     (pause)="isPlaying = false"
+                     playsinline
+                     class="main-video">
+              </video>
+              
+              <!-- Active Violation Overlay on Video -->
+              <div class="video-overlay" *ngIf="activeMarker">
+                <div class="video-overlay-dot"></div>
+                <span>{{ getViolationLabel(activeMarker.violationType) }} &bull; {{ confidenceLabel(activeMarker) }}</span>
+              </div>
+
+              <div class="video-timestamp">
+                {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+              </div>
+            </div>
+
+            <!-- Video Empty / Loading Placeholder -->
+            <div class="video-placeholder" *ngIf="!hasVideo">
+              <div class="vp-box">
+                <span style="font-size: 36px;">📹</span>
+                <p style="margin: 8px 0; font-weight: 600; color: #475569;">
+                  {{ isLoadingVideo ? 'Завантаження відеозапису...' : 'Відеозапис для даної сесії ще обробляється або відсутній на сервері' }}
+                </p>
+                <span style="font-size: 13px; color: #94a3b8;">
+                  Файл зберігається автоматично щохвилини під час іспиту
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Video Controls & Custom Timeline with Violation Markers -->
+          <div class="controls-panel" *ngIf="hasVideo">
+            <div class="timeline-container">
+              <div class="timeline-track" (click)="onTimelineClick($event)">
+                <!-- Filled playback progress -->
+                <div class="timeline-progress" [style.width.%]="(currentTime / (duration || 60)) * 100"></div>
+                <!-- Playhead handle -->
+                <div class="timeline-thumb" [style.left.%]="(currentTime / (duration || 60)) * 100"></div>
+
+                <!-- Violation Marker Pins on Timeline -->
+                @for (v of getViolationsInCurrentChunk(); track v.id) {
+                  <div class="timeline-pin"
+                       [class.active]="activeMarker?.id === v.id"
+                       [style.left.%]="getMarkerPositionPercent(v)"
+                       (click)="$event.stopPropagation(); seekToViolation(v)"
+                       [title]="formatTime(v.relativeTimestampSeconds % 60) + ' - ' + getViolationLabel(v.violationType)">
+                    <div class="pin-popup">
+                      {{ formatTime(v.relativeTimestampSeconds % 60) }} {{ getViolationLabel(v.violationType) }}
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Controls bar -->
+            <div class="controls-bar">
+              <div class="cb-left">
+                <button class="ctrl-btn play-btn" (click)="togglePlay()">
+                  {{ isPlaying ? '⏸ Пауза' : '▶ Відтворити' }}
+                </button>
+                <span class="ctrl-time">
+                  {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+                </span>
+              </div>
+
+              <div class="cb-right">
+                <span class="speed-label">Швидкість:</span>
+                <button class="speed-btn" [class.active]="playbackRate === 1.0" (click)="setSpeed(1.0)">1x</button>
+                <button class="speed-btn" [class.active]="playbackRate === 1.5" (click)="setSpeed(1.5)">1.5x</button>
+                <button class="speed-btn" [class.active]="playbackRate === 2.0" (click)="setSpeed(2.0)">2x</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Violations Timeline List / Keyframes -->
+          <div style="margin-top: 24px;">
+            <p style="font-size: 13px; color: #475569; margin-bottom: 10px; font-weight: 600;">
+              📌 Хронологія зафіксованих порушень у цій сесії ({{ sessionViolations.length }})
+            </p>
+            
+            <div class="violations-table-wrap">
+              <table class="violations-table">
+                <thead>
+                  <tr>
+                    <th>Таймкод</th>
+                    <th>Тип порушення</th>
+                    <th>Впевненість ШІ</th>
+                    <th>Фрагмент (Чанк)</th>
+                    <th>Дія</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (v of sessionViolations; track v.id) {
+                    <tr [class.highlight]="activeMarker?.id === v.id">
+                      <td>
+                        <span class="tc-badge">{{ formatTime(v.relativeTimestampSeconds) }}</span>
+                      </td>
+                      <td>
+                        <strong>{{ getViolationLabel(v.violationType) }}</strong>
+                        @if (getViolationDetail(v)) {
+                          <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">{{ getViolationDetail(v) }}</div>
+                        }
+                      </td>
+                      <td>
+                        <span class="conf-badge">{{ confidenceLabel(v) }}</span>
+                      </td>
+                      <td>
+                        {{ formatTime(v.relativeTimestampSeconds) }} від початку сесії
+                      </td>
+                      <td>
+                        <button class="btn-jump" (click)="seekToViolation(v)">
+                          ▶ Перейти до моменту
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                  @if (sessionViolations.length === 0) {
+                    <tr>
+                      <td colspan="5" style="text-align: center; color: #10b981; padding: 20px;">
+                        ✔️ У цій сесії порушень не зафіксовано.
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  
+    <!-- Right Sidebar with Student & AI Details -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Студент</div></div>
+        <div class="card-body">
+          <div class="student-card">
+            <div class="student-avatar">{{ studentInfo.initials }}</div>
+            <div>
+              <div class="student-name">{{ studentInfo.name }}</div>
+              <div class="student-sub">ID: {{ studentInfo.login.substring(0, 13) }} &bull; {{ studentInfo.group }}</div>
+            </div>
+          </div>
+          <div class="info-section">
+            <div class="info-row">
+              <span class="info-key">Іспит</span>
+              <span class="info-val">{{ studentInfo.examName }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-key">Порушень у сесії</span>
+              <span class="info-val red">{{ sessionViolations.length }}</span>
+            </div>
+            <div class="info-row" *ngIf="currentViolation">
+              <span class="info-key">Час інциденту</span>
+              <span class="info-val">{{ formatTime(currentViolation.relativeTimestampSeconds) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+  
+      <div class="card" *ngIf="currentViolation">
+        <div class="card-header">
+          <div class="card-title">AI Аналіз інциденту</div>
+          <span class="badge-danger">#{{ currentViolation.id }}</span>
+        </div>
+        <div class="card-body">
+          <div class="confidence-bar" *ngIf="currentViolation && ['cell_phone','book','laptop'].includes(currentViolation.violationType)">
+            <div class="conf-label">
+              <span>Оцінка детектора (не доказ порушення)</span>
+              <span class="conf-val">{{ Math.round(currentViolation.confidence * 100) }}%</span>
+            </div>
+            <div class="conf-track">
+              <div class="conf-fill" [style.width.%]="Math.round(currentViolation.confidence * 100)"></div>
+            </div>
+          </div>
+  
+          <label>Підстава рішення<textarea #notes maxlength="2000" (input)="reviewNotes = notes.value" placeholder="Пояснення для протоколу"></textarea></label>
+          <p *ngIf="reviewError" role="alert">{{ reviewError }}</p>
+          <section *ngIf="currentViolation.violationType === 'voice_activity'">
+            <p>Виявлено мовлення. Особу мовця не встановлено. Це не доказ підказки: прослухайте запис у контексті та обґрунтуйте рішення.</p>
+            <p *ngIf="speechTranscript">Автоматична розшифровка (можливі помилки): «{{ speechTranscript }}»</p>
+            <p *ngIf="!speechTranscript">Розшифровка недоступна. Перевірте оригінальний звук запису.</p>
+          </section>
+          <p>Рішення: {{ currentViolation.reviewDecision }}</p>
+          <img *ngIf="evidenceImageUrl" [src]="evidenceImageUrl" alt="Кадр, за яким сформовано сигнал" style="max-width:100%">
+          <p *ngIf="evidenceError" role="alert">{{ evidenceError }}</p>
+          <div class="action-btns">
+            <button class="btn btn-danger" [disabled]="reviewing" (click)="confirmViolation()">Підтвердити порушення</button>
+            <button class="btn btn-ghost" [disabled]="reviewing" (click)="rejectViolation()">Відхилити (хибне спрацювання)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

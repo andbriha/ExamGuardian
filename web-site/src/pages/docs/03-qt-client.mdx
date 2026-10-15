@@ -1,0 +1,158 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "03. Qt Desktop Client Internals"
+---
+
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
+# 3. Component View: Qt Desktop Client
+
+The **Desktop Client** (`Online_Proctoring_System_Client.exe`) is the frontline security component of the platform. Written in modern C++17 and powered by Qt 6, it enforces strict operating system lockdown, executes multi-layered anti-virtualization and anti-tamper heuristics, captures multimedia feeds, and renders the examination interface.
+
+---
+
+## 3.1 Architectural Decomposition
+
+The application is structured using a strict Model-View-ViewModel (MVVM) and Service-Oriented pattern, isolating low-level Win32 system APIs from UI rendering and network I/O:
+
+<Mermaid source={"graph TD\n    subgraph Presentation Layer QML\n        UI_Login[\"LoginScreen.qml\"]\n        UI_Agree[\"AgreementScreen.qml\"]\n        UI_Proc[\"ProcessCheckScreen.qml\"]\n        UI_Media[\"MediaCheckScreen.qml\"]\n        UI_Exam[\"ExamScreen.qml\"]\n    end\n\n    subgraph ViewModel & Orchestration Layer C++\n        VM_Main[\"MainController / ViewModels\"]\n        VM_Exam[\"ExamViewModel\"]\n    end\n\n    subgraph Security & System Enforcement Layer C++ Win32\n        Blocker[\"InputBlocker\\n(WH_KEYBOARD_LL Hooks)\"]\n        EnvDet[\"EnvironmentDetector\\n(Anti-VM, CPUID, BIOS, Devices)\"]\n        ProcScan[\"ProcessScanner\\n(PE Metadata & Snapshot Auditing)\"]\n    end\n\n    subgraph Media & Capture Engine\n        CamCap[\"DirectShow Camera Engine\"]\n        Chunker[\"VideoChunkProcessor\\n(60s rolling MP4 generator)\"]\n        MicCap[\"AudioCaptureEngine (WASAPI)\"]\n    end\n\n    subgraph Network Layer\n        AuthSvc[\"AuthService (JWT Management)\"]\n        CoreClient[\"CoreApiClient (REST & Chunk Upload)\"]\n        MlClient[\"MlApiClient (Sampled Keyframes)\"]\n    end\n\n    UI_Login --> VM_Main\n    UI_Agree --> VM_Main\n    UI_Proc --> VM_Main\n    UI_Media --> VM_Main\n    UI_Exam --> VM_Exam\n\n    VM_Main --> Blocker\n    VM_Main --> EnvDet\n    VM_Main --> ProcScan\n    VM_Main --> CamCap\n    VM_Main --> MicCap\n\n    CamCap --> Chunker\n    MicCap --> Chunker\n\n    Chunker --> CoreClient\n    CamCap --> MlClient\n    VM_Exam --> CoreClient\n    VM_Main --> AuthSvc"} />
+
+---
+
+## 3.2 OS Lockdown: Low-Level Input Interception (`InputBlocker`)
+
+To prevent students from switching tasks, accessing external web browsers, or cheating via keyboard shortcuts, the client registers a low-level Windows keyboard hook:
+
+### Implementation Mechanism
+* **Hook Registration:** Calls `SetWindowsHookExW(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInstance, 0)`.
+* **Key Suppression Logic:** The hook procedure intercepts virtual key codes before the Windows message loop processes them. Returning `1` from `LowLevelKeyboardProc` drops the key event entirely:
+
+```cpp
+LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+    if (nCode == HC_ACTION) {
+        KBDLLHOOKSTRUCT *p = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
+        
+        bool isAlt = (p->flags & LLKHF_ALTDOWN);
+        bool isCtrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000);
+        bool isShift = (GetAsyncKeyState(VK_SHIFT) & 0x8000);
+
+        // Block Alt+Tab and Alt+Esc (Window switching)
+        if (isAlt && (p->vkCode == VK_TAB || p->vkCode == VK_ESCAPE)) return 1;
+
+        // Block Windows Keys (Start Menu)
+        if (p->vkCode == VK_LWIN || p->vkCode == VK_RWIN) return 1;
+
+        // Block Ctrl+Esc (Start Menu alternative)
+        if (isCtrl && p->vkCode == VK_ESCAPE) return 1;
+
+        // Block Ctrl+Shift+Esc (Task Manager shortcut)
+        if (isCtrl && isShift && p->vkCode == VK_ESCAPE) return 1;
+
+        // Block Alt+F4 (Force Close window)
+        if (isAlt && p->vkCode == VK_F4) return 1;
+
+        // Block PrintScreen / Win+Shift+S (Screen Capture)
+        if (p->vkCode == VK_SNAPSHOT) return 1;
+    }
+    return CallNextHookEx(nullptr, nCode, wParam, lParam);
+}
+```
+
+* **Full-Screen Kiosk Mode:** The main Qt window flags are set to `Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint`, maximizing across the primary display viewport and preventing minimization.
+
+---
+
+## 3.3 Multi-Vector Anti-VM & Sandbox Detection (`EnvironmentDetector`)
+
+Running the proctoring client inside a Virtual Machine allows candidates to cheat on the unmonitored host OS. To eliminate this vector, the client applies a 6-layer heuristic detection matrix:
+
+<Mermaid source={"graph TD\n    subgraph Multi-Vector Anti-VM Heuristics\n        H1[\"1. CPUID Hypervisor Bit\\nQuery leaf 0x1 ECX bit 31\\nExtract vendor leaf 0x40000000\"]\n        H2[\"2. Registry BIOS Signatures\\nAudit SystemManufacturer & BIOSVersion\\nFlags 'VMware', 'VirtualBox', 'QEMU'\"]\n        H3[\"3. Virtual Disk & SCSI Models\\nInspect disk hardware IDs\\nFlags 'VBOX HARDDISK', 'VMware IDE'\"]\n        H4[\"4. Kernel Device Drivers\\nCheck existence of VM driver binaries\\n'VBoxMouse.sys', 'vmmouse.sys'\"]\n        H5[\"5. Virtual Camera Auditing\\nDirectShow filter device enumeration\\nBlocks 'OBS Virtual Cam', 'ManyCam'\"]\n        H6[\"6. Multi-Monitor Topology\\nAudits SM_CMONITORS metric\\nForces single-monitor workspace\"]\n    end"} />
+
+### 1. CPUID Hypervisor Query
+* CPUID function `0x1` returns CPU feature flags in `ECX`. Bit 31 is the standard hypervisor present flag:
+```text
+is_hypervisor = (ecx >> 31) & 1
+```
+* If set, calling CPUID function `0x40000000` returns the hypervisor vendor string in registers `EBX`, `ECX`, and `EDX` (e.g. `"VMwareVMware"`, `"VBoxVBoxVBox"`, `"Microsoft Hv"`, `"KVMKVMKVM"`, `"XenVMMXenVMM"`).
+
+### 2. Registry BIOS & System Artifacts
+* Reads `HKEY_LOCAL_MACHINE\HARDWARE\DESCRIPTION\System\BIOS`:
+  * `SystemManufacturer`
+  * `SystemProductName`
+  * `BIOSVersion`
+* Scans strings for known hypervisor signatures (`"VirtualBox"`, `"VMware"`, `"QEMU"`, `"Hyper-V"`, `"Parallels"`, `"InnoTek"`).
+
+### 3. SCSI & Storage Device ID Inspection
+* Traverses `SYSTEM\CurrentControlSet\Services\Disk\Enum` and system setup device nodes.
+* Flags virtual hard disk identifiers: `"VBOX HARDDISK"`, `"VMware Virtual IDE"`, `"QEMU HARDDISK"`, `"Virtual HD"`.
+
+### 4. Hypervisor Driver Files
+* Verifies whether virtual machine guest additions are active by checking kernel driver paths:
+  * `C:\Windows\System32\drivers\VBoxMouse.sys`
+  * `C:\Windows\System32\drivers\VBoxGuest.sys`
+  * `C:\Windows\System32\drivers\vmmouse.sys`
+  * `C:\Windows\System32\drivers\vmhgfs.sys`
+
+### 5. Virtual Camera Detection
+* Enumerates installed DirectShow video capture filters using `ICreateDevEnum` and `CLSID_VideoInputDeviceCategory`.
+* Prohibits virtual video loopback devices (`"OBS Virtual Camera"`, `"ManyCam Virtual Webcam"`, `"vMix Video"`, `"CamTwist"`).
+
+### 6. Multi-Monitor Lockdown
+* Calls `GetSystemMetrics(SM_CMONITORS)`.
+* If more than one active display is detected, the exam start button is disabled until secondary monitors are physically unplugged or set to single-screen mode (`Win+P` $\rightarrow$ PC screen only).
+
+---
+
+## 3.4 Process Scanner & Anti-Spoofing PE Inspection (`ProcessScanner`)
+
+Students frequently attempt to run Discord, Telegram, or remote desktop tools in the background, sometimes disguising them by renaming executables (e.g., renaming `discord.exe` to `svchost.exe`).
+
+### Anti-Spoofing PE Verification
+1. **Process Traversal:** Periodically captures a system process snapshot using `CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)`.
+2. **Process Path Resolution:** Obtains the full executable filesystem path using `OpenProcess` with `PROCESS_QUERY_LIMITED_INFORMATION` and `QueryFullProcessImageNameW`.
+3. **PE Version Information Extraction:** Uses the Windows Version Management API (`GetFileVersionInfoSizeW`, `GetFileVersionInfoW`, and `VerQueryValueW`) to inspect binary metadata:
+   * `OriginalFilename`
+   * `FileDescription`
+   * `ProductName`
+   * `CompanyName`
+4. **Signature Matching:** Compares both process name and internal PE strings against blacklisted prohibited software:
+
+| Software Category | Target Applications | Action Triggered |
+| :--- | :--- | :--- |
+| **Communication / Messaging** | Discord, Telegram, Skype, WhatsApp, Slack, Zoom, MS Teams | Blocks Exam Start / Triggers Violation Event |
+| **Remote Access / Screen Sharing** | TeamViewer, AnyDesk, UltraViewer, RustDesk, Parsec, VNC | Immediate Proctor Alert |
+| **Streaming / Recording Tools** | OBS Studio, Streamlabs, Bandicam, Action!, Camtasia | Immediate Proctor Alert |
+| **Browsers & DevTools** | Chrome (external), Firefox, Edge, Cheat Engine, Process Hacker | Forced Closure Warning |
+
+5. **Performance Caching:** Hashes scanned executable paths and timestamps with SHA-256 to avoid repeated disk reads, maintaining under 1% CPU utilization.
+
+---
+
+## 3.5 Media Capture & Video Chunking Engine
+
+<Mermaid source={"sequenceDiagram\n    participant Cam as DirectShow Camera\n    participant Chunker as VideoChunkProcessor\n    participant Disk as Local Temp Disk\n    participant Net as CoreApiClient\n    participant API as ASP.NET Core API\n\n    loop Every 60 Seconds\n        Cam->>Chunker: Continuous frame buffers\n        Chunker->>Disk: Finalize chunk_N.mp4 (H.264 / AAC)\n        Chunker->>Net: Enqueue upload task\n        Net->>API: POST /api/video/upload-chunk (Multipart: sessionId, chunkIndex, file)\n        API-->>Net: 200 OK (Chunk indexed)\n        Net->>Disk: Remove local chunk_N.mp4\n    end"} />
+
+* **Chunk Duration:** Fixed 60-second rolling cycles.
+* **Format:** Encoded in standard `.mp4` (H.264 baseline profile for universal browser compatibility).
+* **Fault-Tolerant Queue:** If an upload fails due to network degradation, chunks remain cached on the local drive in `%TEMP%\ExamGuardian\chunks\` and are re-attempted with exponential backoff before the final exam submission.
+
+## 3.6 Development and production client builds
+
+The client has explicit `development` and `production` flavors, independent of Debug/Release optimization. `EXAMGUARDIAN_FLAVOR` selects the flavor during CMake configuration. The source development workflow defaults to development; production packaging passes `production` explicitly. Invalid flavors fail configuration.
+
+Build directories, application identifiers, QSettings, installers and local queues are independent. Queues remain bound to environment, origin and user. Changing environment does not transfer evidence capabilities, pending answers or recordings into the other stack.
+
+Only development adds `src/development/development_viewmodel.{h,cpp}` and `qml/development/DevelopmentWindow.qml` to compilation/resource registration. Production contains no window, shortcut or development policy handler. Its Main and ProcessCheck QML resources are generated without development policy lookups; configuration fails if a lookup remains. `--verify-production` checks the resources in the actual executable. The manifest identifies flavor, version and source hashes.
+
+## 3.7 Local development controls
+
+The development client opens a separate controls menu at startup, before login. The button and `Ctrl+Shift+D` reopen it. All switches start off. The available switches disable VM checks, process blocking, display checks, virtual device checks, keyboard restrictions and focus restrictions. They act only on the local client. The menu shows active switches and locks them once an attempt starts.
+
+Login, student accounts, exam selection, identity challenges, signed admission, recording, AI analysis, answer persistence, scoring and examiner review use the same implementation as production. There are no fabricated admissions, synthetic attempt types or automatic sample accounts/exams. Production excludes the local controls window and handlers at build time.
+
+Client-resistance experiments use an isolated disposable database. Automated checks never insert fixtures into the working development environment. With switches off, the normal protections run. With selected switches on, the client can be used on a development machine while the actual examination workflow remains intact.
+
+The disk upload queue preserves failed files. Queue selection and finalization barriers apply per attempt: missing credentials or permanent errors for an older attempt do not stop delivery for newer attempts. A finalize request waits for its own queued files/events; permanent rejected entries remain available for diagnosis.

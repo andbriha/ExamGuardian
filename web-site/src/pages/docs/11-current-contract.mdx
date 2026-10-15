@@ -1,0 +1,57 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "11. Current implementation & validation"
+---
+
+# Current implementation and validation
+
+ExamGuardian supports a self-hosted examination and a reasoned examiner decision. The score measures answers. An automated observation does not establish cheating, and the integrity verdict is stored separately.
+
+## Attempt contract
+
+The student chooses an assigned exam, passes a bound and expiring identity/pose challenge, and obtains a signed admission. Core controls the deadline, attempt limit and frozen exam definition. Resume keeps the original deadline and restores saved answers. A dedicated attempt token protects answers, submission and analysis; it rotates after a verified resume. Evidence delivery has a separate seven-day capability to support recovery.
+
+The client saves pending answers and queues recordings/events on disk. Core verifies readable MP4 tracks, actual durations, index immutability and SHA-256 retries. Camera and screen streams have explicit time ranges. Their final manifest distinguishes complete file coverage from partial or unknown delivery. It does not prove camera picture quality.
+
+## Monitoring and decisions
+
+The panel uses REST polling every eight seconds and authorized preview frames every two seconds. It shows connection, camera analysis, audio analysis and evidence delivery separately. Playback seeks using recorded offsets/durations; gaps are visible. Expired video links are renewed once while keeping the playback position.
+
+The examiner confirms or dismisses each observation with an audit history. An accepted attempt requires delivered evidence and dismissed observations. Rejection requires a confirmed observation. Inconclusive records insufficient evidence. Late observations or newly received media return an attempt to review, while the academic score stays fixed. The report is browser-printable HTML, not a signed immutable PDF.
+
+## AI scope
+
+Identity checks use DeepFace, face landmarks use MediaPipe, objects use YOLOv8 and speech activity uses WebRTC VAD. Continuous identity checking is periodic. The pose challenge requires a neutral baseline and a sustained transition on distinct frames. Anti-spoofing checks are enabled, but resistance to photographs/replays still needs labelled attack testing.
+
+Head landmarks provide normalized pose indicators, not calibrated gaze/Euler measurements. VAD indicates speech activity, not the identity of a speaker or the meaning of speech. The unvalidated micro-earpiece heuristic is disabled. Permitted speech, head-movement reporting and allowed objects are exam policy settings captured at attempt start.
+
+Models share a bounded analysis slot, reject oversized inputs and signal capacity errors. A SQLite outbox retries observations. Readiness waits for model loading and warmup. Accuracy and classroom-scale throughput have not been established by blank-frame startup checks. The offline evaluation tool records labelled confusion counts, latency, versions and sample/weight hashes.
+
+## Operations
+
+The normal topology is one Nginx origin. Qt sends media to AI through Nginx; AI validates attempts and sends durable events to Core. Core stores attempts in PostgreSQL. The AI port is loopback only. A TLS overlay is available for a configured host certificate. Random bootstrap configuration replaces published default credentials in fresh installations.
+
+Database migrations are tracked. Backup includes database, media and online SQLite snapshots; restore uses a new isolated target. Retention is disabled until an administrator chooses a period and previews an explicit maintenance plan. It expires media for old finished/reviewed attempts while preserving answers, scores and review history.
+
+Build a release from source with `Client/build-release.ps1`. It checks packaged QML startup and records hashes/source state. Existing portal binaries need a deliberate update from a verified release.
+
+## Readiness boundary
+
+Windows and Linux builds, headless QML startup and disk-queue tests pass. A native Windows Qt client also completes login, admission, autosave and submission against the isolated API. Linux X11 device behavior still needs a practical test; Wayland blocking is unsupported. Real cameras, microphones, interrupted capture, multi-student load, false-positive rates and attack resistance need practical validation before an institutional pilot is accepted.
+
+The detailed original audit and working verification record live in the repository as `PROJECT_ANALYSIS.md` and `WORK_PROGRESS.md`. Chapters 01–10 retain design context and must not be read as confirmation that every proposed capability is implemented.
+
+
+## Development and production implementation checkpoint
+
+The isolated Compose environments and launcher are implemented. `./run.ps1` selects development; `--production` or the Cyrillic alias selects production, requiring an independent `.env.production` and actual HTTPS configuration. `--check`, `--status` and `--stop` operate on the selected project. Stopping development preserves its volumes and the existing legacy stack.
+
+Development runs Core watch, AI reload, Angular live updates and an Astro container. Qt is native. On this workstation the application origin is `http://127.0.0.1:8081`; the documentation container uses port 4323 because 4321/4322 already host existing documentation servers. Newly initialized installations select an available docs port and store it in `.env.dev`.
+
+The DEV client menu is local and opens before login. It disables selected local restrictions only; identity admission, recording, AI, exams and reports remain ordinary. The API and panel have no synthetic attempt workflow. Automated fixtures previously left in the working dev database were removed after a backup, preserving the user's student and examiner accounts. Further mutation tests use disposable databases only.
+
+The landing is shared with production; a development file mount serves the DEV installer at the common download URL. Production deployment still requires configured HTTPS and `.env.production`. Physical-device and classroom-load validation remain outstanding.
+
+Examination availability is the absolute interval from the scheduled UTC start (inclusive) to start plus duration (exclusive). A late arrival keeps that same end time. After it, no start/resume or answer change is accepted. Creation converts an explicit local time and IANA timezone on the server; ambiguous/missing DST times are rejected. The panel uses the server clock and refreshes scheduled/active/completed state.
+
+Head direction is anatomical: left/right refer to the student, not the observer looking at an unmirrored image. Recording delivery keeps independent attempt queues: a deleted attempt or permanent rejection cannot block a newer attempt. Existing real files can be retried and are removed locally only after a matching hash acknowledgement.

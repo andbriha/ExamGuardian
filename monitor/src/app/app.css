@@ -156,3 +156,6 @@
   color: #333;
   font-weight: 600;
 }
+.main-content { min-width:0; }
+.sidebar { flex-shrink:0; overflow-y:auto; }
+@media(max-width:760px) { .dashboard-container { flex-direction:column; height:auto; min-height:100vh; } .sidebar { width:100%; padding:12px 0; } .nav-menu { display:flex; flex-wrap:wrap; } .menu-label { display:none; } .nav-item { padding:10px 12px; } .logo { padding-bottom:12px; } .top-bar { padding:12px; flex-wrap:wrap; } .content-wrapper { padding:12px; } }

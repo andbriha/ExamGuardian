@@ -1,0 +1,19 @@
+---
+import Navigation from '../components/Navigation.astro'
+
+import '../styles/global.css'
+
+const title = Astro.props.title
+
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <Navigation />
+    <slot />
+  </body>
+</html>

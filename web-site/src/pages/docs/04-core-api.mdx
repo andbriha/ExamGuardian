@@ -1,0 +1,190 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "04. ASP.NET Core Gateway & Data Architecture"
+---
+
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
+# 4. Component View: ASP.NET Core Gateway
+
+The **Core API Gateway** is the central nervous system of **ExamGuardian**. Built with ASP.NET Core 9 and Entity Framework Core, it follows Clean Architecture and Domain-Driven Design (DDD) principles. It is responsible for authorization, session lifecycle management, video chunk indexing, AI webhook ingestion, and real-time SignalR WebSocket dispatching.
+
+---
+
+## 4.1 Layered Architecture
+
+The solution adheres to clean separation of concerns across three distinct layers:
+
+<Mermaid source={"graph TD\n    subgraph Presentation Layer Core.Api\n        Controllers[\"REST Controllers\\n(Auth, Exams, ExamSessions, Students, Violations, VideoUpload)\"]\n        Hubs[\"SignalR WebSocket Hubs\\n(ExamMonitorHub)\"]\n        Middlewares[\"Attributes & Filters\\n(ApiKeyAttribute, JWT Bearer Auth)\"]\n    end\n\n    subgraph Business Logic Layer BLL\n        AuthService[\"AuthService (JWT & BCrypt Password Hashing)\"]\n        ExamService[\"ExamService (Exam CRUD & Scheduling)\"]\n        SessionService[\"ExamSessionService (Start / Finish Lifecycle)\"]\n        ViolationService[\"ViolationAlertService (Alert Ingestion & Scoring)\"]\n        UserService[\"UserService (Student & Proctor Management)\"]\n        DTOs[\"Data Transfer Objects (DTOs) — Request & Response shapes\"]\n    end\n\n    subgraph Data Access Layer DAL\n        DbContext[\"AppDbContext (EF Core 9)\"]\n        Repositories[\"Generic & Specialized Repositories\"]\n        Entities[\"Database Entities (PostgreSQL Code-First mappings)\"]\n        UoW[\"UnitOfWork (transaction boundary)\"]\n    end\n\n    Controllers --> BLL\n    Hubs --> BLL\n    BLL --> DAL\n    DbContext --> Entities\n    UoW --> Repositories"} />
+
+---
+
+## 4.2 REST API Endpoints
+
+### Authentication
+
+| Method | Endpoint | Auth | Description |
+| :-- | :-- | :-- | :-- |
+| `POST` | `/api/auth/login` | — | Student / proctor login, returns JWT + refresh token |
+| `POST` | `/api/auth/refresh` | — | Exchange refresh token for new JWT |
+
+**Login Request / Response:**
+
+```json
+// POST /api/auth/login
+{ "login": "student_kn21_04", "password": "SecurePass123!" }
+
+// 200 OK
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "d7a4f910-8b1e-4c3a-b852...",
+  "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "role": "Student",
+  "name": "Oleksandr Shevchenko"
+}
+```
+
+### Exam Sessions
+
+| Method | Endpoint | Auth | Description |
+| :-- | :-- | :-- | :-- |
+| `GET` | `/api/examsessions` | — | List all sessions |
+| `GET` | `/api/examsessions/{id}` | — | Get session by integer ID |
+| `GET` | `/api/examsessions/by-student/{studentId}` | — | Sessions for a student (GUID) |
+| `GET` | `/api/examsessions/by-exam/{examId}` | — | Sessions for an exam |
+| `POST` | `/api/examsessions/start` | `[Student]` | Start a new session |
+| `PATCH` | `/api/examsessions/{id}/finish` | `[Student]` | Finish session and submit score |
+
+**Start Session:**
+```json
+// POST /api/examsessions/start
+{ "examId": 1, "studentId": "3fa85f64-5717-4562-b3fc-2c963f66afa6" }
+
+// 201 Created
+{ "id": 42, "examId": 1, "studentId": "...", "startTime": "2026-10-14T10:00:00Z", "isFinished": false, "score": 0 }
+```
+
+**Finish Session:**
+```http
+PATCH /api/examsessions/42/finish?score=85.0
+→ 200 OK: updated session with endTime & score
+```
+
+### Violations
+
+| Method | Endpoint | Auth | Description |
+| :-- | :-- | :-- | :-- |
+| `POST` | `/api/violations` | `[ApiKey]` | Ingest AI violation webhook (protected by `X-Api-Key` header) |
+| `POST` | `/api/violations/report` | — | Report client-side OS violations from Qt desktop app |
+| `GET` | `/api/violations/by-session/{sessionId}` | — | Get all violations for a session |
+| `GET` | `/api/violations/{id}` | — | Get violation by ID |
+| `GET` | `/api/violations/unreviewed` | — | Get pending unreviewed violations |
+| `PATCH` | `/api/violations/{id}/review` | — | Mark violation as reviewed |
+
+**Violation Payload (from AI Engine or Qt Client):**
+```json
+{
+  "examSessionId": 42,
+  "violationType": "LookingLeft_NotesHint",
+  "confidence": 0.88,
+  "relativeTimestampSeconds": 142,
+  "evidenceUrl": "/images/evidence_42_142.jpg",
+  "metadata": "{\"yaw\": -0.24, \"pitch\": 0.05}"
+}
+```
+
+### Video Upload
+
+| Method | Endpoint | Auth | Description |
+| :-- | :-- | :-- | :-- |
+| `POST` | `/api/video/upload-chunk` | `[Student]` | Upload 60-second `.mp4` chunk (multipart/form-data, field: `file`, params: `sessionId`, `chunkIndex`) |
+| `GET` | `/api/video/{sessionId}/chunks` | — | Retrieve ordered chunk manifest with URLs |
+| `GET` | `/api/video/{sessionId}/{chunkIndex}` | — | Stream specific video chunk (supports HTTP byte-range) |
+
+**Chunk manifest response:**
+```json
+[
+  { "index": 0, "startTime": 0.0, "duration": 60.0, "url": "/api/video/42/0" },
+  { "index": 1, "startTime": 60.0, "duration": 60.0, "url": "/api/video/42/1" }
+]
+```
+
+### Students / Users
+
+| Method | Endpoint | Auth | Description |
+| :-- | :-- | :-- | :-- |
+| `GET` | `/api/Students` | `[Examiner]` | List all students |
+| `GET` | `/api/Students/{id}` | `[Examiner, Student]` | Get student profile |
+| `POST` | `/api/Students` | `[Examiner]` | Create student with credentials |
+| `POST` | `/api/Students/{id}/photo` | `[Examiner]` | Upload biometric reference photo → saved to shared volume as `images/{id}.jpg` for AI face matching |
+| `GET` | `/api/Students/{id}/photo` | — | Stream student reference photo |
+| `DELETE` | `/api/Students/{id}` | `[Examiner]` | Delete student record |
+
+### Exam Submission
+
+The actual exam submission is decoupled — the **Qt client** calls `POST /api/Exams/{id}/submit` with answers. Score is calculated server-side:
+
+```json
+// POST /api/Exams/{examId}/submit  [Student]
+{
+  "sessionId": 42,
+  "answers": [
+    { "questionId": 1, "selectedOptionIndex": 2 },
+    { "questionId": 2, "selectedOptionIndex": 0 }
+  ]
+}
+
+// 200 OK
+{ "sessionId": 42, "score": 85.0, "isFinished": true }
+```
+
+---
+
+## 4.3 Examination Session Lifecycle
+
+The examination session follows a simplified two-state lifecycle driven by `IsFinished: bool`:
+
+<Mermaid source={"stateDiagram-v2\n    [*] --> Active: POST /api/examsessions/start\\n(Student Connects & Passes Checks)\n    Active --> Finished: PATCH /api/examsessions/{id}/finish\\n(Student Submits Answers or Time Expires)\n    Active --> Finished: Proctor action via Angular Monitor\n    Finished --> [*]\n\n    note right of Active\n        IsFinished = false\n        Violations accumulate\n        Video chunks upload continuously\n        AI inference running\n    end note\n\n    note right of Finished\n        IsFinished = true\n        Score persisted\n        EndTime stamped\n        Final chunk flushed\n    end note"} />
+
+> **Note:** The session entity uses a boolean `IsFinished` flag. The richer state machine (`Scheduled / InProgress / TerminatedByProctor / Cancelled`) is enforced at the **application layer** in `ExamSessionService` with guard checks that throw `InvalidOperationException` on illegal transitions (e.g., finishing an already-finished session).
+
+### Integrity Scoring Engine
+
+The final Academic Integrity Score is calculated from the accumulated `ViolationAlert` records:
+
+```text
+Integrity Score = max(0, 100 - SUM(weight_i × confidence_i))
+```
+
+Violation weights by severity category:
+
+| Severity | Examples | Penalty Weight |
+| :-- | :-- | :-- |
+| **Critical** | Smartphone detected, second person in frame, micro-earpiece, VM detected | 25 |
+| **Warning** | Sustained gaze deviation (\|yaw\| > 0.19 or pitch > 0.17), whispering, late-closed prohibited app | 8 |
+| **Info** | Brief face occlusion, low-light warning | 2 |
+
+---
+
+## 4.4 Entity Relationship Diagram (ERD)
+
+The following ERD reflects the **actual** database schema as implemented in EF Core entities:
+
+<Mermaid source={"erDiagram\n    USERS ||--o{ EXAM_SESSIONS : \"attends (StudentId FK)\"\n    USERS ||--o{ EXAMS : \"created by (CreatorId FK)\"\n    EXAMS ||--o{ EXAM_SESSIONS : \"instantiated by\"\n    EXAMS ||--o{ QUESTIONS : \"contains\"\n    QUESTIONS ||--o{ QUESTION_OPTIONS : \"has choices\"\n    EXAM_SESSIONS ||--o{ VIOLATION_ALERTS : \"logs\"\n\n    USERS {\n        guid Id PK\n        string FullName\n        string Login\n        string PasswordHash\n        string Role\n        string Group\n        string BioVector\n        string PhotoUrl\n        string RefreshToken\n        datetime RefreshTokenExpiryTime\n    }\n\n    EXAMS {\n        int Id PK\n        string Title\n        string Description\n        string RawContent\n        datetime CreatedAt\n        datetime ScheduledStartTime\n        int DurationMinutes\n        guid CreatorId FK\n    }\n\n    EXAM_SESSIONS {\n        int Id PK\n        guid StudentId FK\n        int ExamId FK\n        datetime StartTime\n        datetime EndTime\n        double Score\n        bool IsFinished\n    }\n\n    QUESTIONS {\n        int Id PK\n        int ExamId FK\n        string Text\n        string CorrectOptionId\n    }\n\n    QUESTION_OPTIONS {\n        int Id PK\n        int QuestionId FK\n        string Text\n    }\n\n    VIOLATION_ALERTS {\n        int Id PK\n        int ExamSessionId FK\n        string ViolationType\n        double Confidence\n        int RelativeTimestampSeconds\n        string EvidenceUrl\n        string Metadata\n        datetime Timestamp\n        bool IsReviewed\n    }"} />
+
+> **Implementation note:** Primary keys use `int` (auto-increment) for sessions and violations. `User.Id` uses `Guid`. There is no separate `VIDEO_CHUNKS` table — video chunk metadata is managed by the `VideoUploadController` using the filesystem with indexed naming (`chunk_{N:D4}.mp4`).
+
+## 4.5 Shared development and production API
+
+Both profiles compile the same Core API. They differ in deployment settings, storage and reload behavior. The API has no development admission signer or development routes. Every attempt requires the ordinary bound identity admission and follows the same authority, deadline, scoring and evidence rules.
+
+The Qt development menu only changes local restriction gates. Core does not manufacture test attempts or seed sample students/exams. Existing migration history is preserved, and a forward migration removes retired test-policy columns.
+
+## 4.6 Absolute examination window
+
+An exam closes at `scheduledStartTime + durationMinutes`. Core rejects start/resume outside that window and sets every attempt deadline to its scheduled end, rather than giving each arrival a fresh duration. Answers received at or after the deadline are rejected; deadline grading uses previously saved answers.
+
+Creation accepts either an explicit UTC/offset timestamp or `scheduledStartLocal` with `timeZoneId`. Core converts local time independently of the browser timezone and rejects DST ambiguity. Catalog DTOs provide `scheduledEndTime`, `serverTimeUtc` and the display timezone.

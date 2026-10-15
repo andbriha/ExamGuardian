@@ -1,0 +1,156 @@
+<div class="page-wrap">
+  <div class="header">
+    <div>
+      <h2>👥 База студентів</h2>
+      <p class="sub">Керування студентами, розподіл за академічними групами та AI-еталонами</p>
+    </div>
+    <div class="h-actions">
+      <button class="btn-primary" routerLink="/add-student">+ Додати студента</button>
+    </div>
+  </div>
+
+  <div *ngIf="isLoading" style="padding: 24px; text-align: center; color: #64748b;">
+    <p>⏳ Завантаження бази студентів...</p>
+  </div>
+
+  <div *ngIf="!isLoading && errorMessage" style="padding: 20px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 20px; color: #b91c1c;">
+    <p>{{ errorMessage }}</p>
+    <a routerLink="/login" style="display: inline-block; margin-top: 10px; color: #1a56db; font-weight: 600;">Перейти до сторінки входу &rarr;</a>
+  </div>
+
+  <!-- Filter & Groups Toolbar -->
+  <div class="toolbar" *ngIf="!isLoading">
+    <div class="group-tabs">
+      @for (g of groups; track g) {
+        <button class="tab-btn" 
+                [class.active]="selectedGroup === g" 
+                (click)="selectGroup(g)">
+          {{ g }}
+          <span class="count-pill">
+            {{ g === 'Всі групи' ? students.length : getStudentsInGroup(g).length }}
+          </span>
+        </button>
+      }
+    </div>
+
+    <div class="search-row">
+      <input 
+        type="text" 
+        [(ngModel)]="searchText" 
+        placeholder="Пошук за ПІБ, групою або логіном..." 
+        class="search-input">
+      
+      <div class="view-switch">
+        <button class="btn-toggle" [class.active]="viewMode === 'grouped'" (click)="viewMode = 'grouped'" title="Групувати за академічними групами">
+          📁 За групами
+        </button>
+        <button class="btn-toggle" [class.active]="viewMode === 'list'" (click)="viewMode = 'list'" title="Загальна таблиця">
+          📄 Таблиця
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode 1: Grouped View (By Academic Groups) -->
+  <div class="groups-container" *ngIf="!isLoading && viewMode === 'grouped'">
+    @for (grp of activeGroups; track grp) {
+      <div class="group-section" *ngIf="getStudentsInGroup(grp).length > 0">
+        <div class="group-header">
+          <div class="gh-left">
+            <span class="gh-icon">🎓</span>
+            <h3>Група: {{ grp }}</h3>
+          </div>
+          <span class="gh-count">{{ getStudentsInGroup(grp).length }} студентів</span>
+        </div>
+
+        <div class="students-grid">
+          @for (s of getStudentsInGroup(grp); track s.id) {
+            <div class="student-item-card">
+              <div class="sic-top">
+                <div class="sic-avatar">
+                  {{ s.fullName.substring(0, 2).toUpperCase() }}
+                </div>
+                <div class="sic-info">
+                  <a [routerLink]="['/student', s.id]" class="sic-name">{{ s.fullName }}</a>
+                  <span class="sic-login font-mono">{{ s.login }}</span>
+                </div>
+              </div>
+
+              <div class="sic-meta">
+                <div class="sic-tag">
+                  <span>AI FaceID:</span>
+                  @if (s.hasPhoto) {
+                    <span class="text-green fw-600">✅ Наявне</span>
+                  } @else {
+                    <span class="text-red fw-600">❌ Відсутнє</span>
+                  }
+                </div>
+                <div class="sic-tag">
+                  <span>Статус:</span>
+                  <span class="status-pill" [class.active]="s.isActive">
+                    {{ s.isActive ? 'Активний' : 'Заблокований' }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="sic-actions">
+                <a [routerLink]="['/student', s.id]" class="btn-card-action">Профіль ➔</a>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    @if (filteredStudents.length === 0 && !errorMessage) {
+      <div class="empty-state-box">
+        <span style="font-size: 32px;">🔍</span>
+        <p>Студентів у вибраній групі не знайдено.</p>
+      </div>
+    }
+  </div>
+
+  <!-- Mode 2: Standard Data Table View -->
+  <div class="table-card" *ngIf="!isLoading && viewMode === 'list'">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ПІБ</th>
+          <th>Група</th>
+          <th>Логін</th>
+          <th>AI Фото</th>
+          <th>Статус</th>
+          <th>Дії</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (s of filteredStudents; track s.id) {
+          <tr>
+            <td class="fw-600">
+              <a [routerLink]="['/student', s.id]" style="color: #1a56db; text-decoration: none; font-weight: 600;">
+                {{ s.fullName }}
+              </a>
+            </td>
+            <td><span class="badge">{{ s.groupName }}</span></td>
+            <td class="font-mono">{{ s.login }}</td>
+            <td>
+              @if (s.hasPhoto) { <span class="text-green">✅ Є</span> }
+              @else { <span class="text-red">❌ Немає</span> }
+            </td>
+            <td>
+              <span class="status-dot" [class.active]="s.isActive"></span>
+              {{ s.isActive ? 'Активний' : 'Заблокований' }}
+            </td>
+            <td>
+            </td>
+          </tr>
+        }
+        @if (filteredStudents.length === 0 && !errorMessage) {
+          <tr>
+            <td colspan="6" class="empty-state">Студентів не знайдено.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

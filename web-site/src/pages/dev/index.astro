@@ -1,0 +1,117 @@
+---
+import Layout from '../../layouts/Layout.astro'
+import Navigation from '../../components/Navigation.astro'
+---
+<Layout title="Architecture | ExamGuardian">
+    <main class="container mx-auto px-4 py-12 max-w-5xl">
+        
+        <div class="mb-12 border-b border-slate-200 pb-6 text-center">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">System Architecture</h1>
+            <p class="text-lg text-slate-600 max-w-2xl mx-auto">High-level architectural overview of ExamGuardian. Designed for scale, built with microservices.</p>
+        </div>
+        
+        <div class="flex flex-col gap-16 text-slate-700">
+            
+            <!-- Context Flow (CSS Diagram) -->
+            <section class="flex flex-col gap-6 items-center">
+                <h2 class="text-2xl font-bold text-slate-800 self-start">1. Data Flow Context</h2>
+                
+                <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-8 flex flex-col md:flex-row items-center justify-between gap-4 shadow-inner">
+                    <div class="flex flex-col items-center gap-2 w-32">
+                        <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold shadow-sm">App</div>
+                        <span class="text-sm font-semibold">Student Client</span>
+                    </div>
+                    
+                    <div class="hidden md:flex flex-1 border-t-2 border-dashed border-slate-300 relative">
+                        <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-50 px-2 text-xs text-slate-400 font-mono">WSS / HTTPS</div>
+                        <div class="absolute -right-1 -top-1.5 w-3 h-3 border-t-2 border-r-2 border-slate-300 transform rotate-45"></div>
+                    </div>
+
+                    <div class="flex flex-col items-center gap-2 w-40">
+                        <div class="w-20 h-20 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center font-bold shadow-sm border-2 border-purple-200">API Gateway</div>
+                        <span class="text-sm font-semibold">ASP.NET Core</span>
+                    </div>
+
+                    <div class="hidden md:flex flex-1 border-t-2 border-dashed border-slate-300 relative">
+                         <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-slate-50 px-2 text-xs text-slate-400 font-mono">REST / Async</div>
+                         <div class="absolute -right-1 -top-1.5 w-3 h-3 border-t-2 border-r-2 border-slate-300 transform rotate-45"></div>
+                    </div>
+
+                    <div class="flex flex-col items-center gap-2 w-32">
+                        <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center font-bold shadow-sm">AI</div>
+                        <span class="text-sm font-semibold">FastAPI Engine</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Container Level -->
+            <section>
+                <h2 class="text-2xl font-bold text-slate-800 mb-6">2. Core Containers</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+                        <div class="flex items-center gap-3 mb-3">
+                            <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded">Qt / C++</span>
+                            <h3 class="font-bold text-slate-900 text-lg">Desktop Client</h3>
+                        </div>
+                        <p class="text-sm leading-relaxed">Native application for students. Operates at the OS level to block global hotkeys, detect virtual machines, and securely transmit screen and camera feeds.</p>
+                    </div>
+
+                    <div class="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+                        <div class="flex items-center gap-3 mb-3">
+                            <span class="bg-purple-100 text-purple-800 text-xs font-bold px-2 py-1 rounded">ASP.NET Core</span>
+                            <h3 class="font-bold text-slate-900 text-lg">Central API Gateway</h3>
+                        </div>
+                        <p class="text-sm leading-relaxed">The orchestrator. Handles JWT authorization, attempt capabilities and evidence access, and persistent storage of exam states and violations.</p>
+                    </div>
+
+                    <div class="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+                        <div class="flex items-center gap-3 mb-3">
+                            <span class="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded">Python / FastAPI</span>
+                            <h3 class="font-bold text-slate-900 text-lg">AI Analytics Engine</h3>
+                        </div>
+                        <p class="text-sm leading-relaxed">An isolated, horizontally scalable microservice running YOLOv8, MediaPipe, and DeepFace. Processes incoming frames asynchronously.</p>
+                    </div>
+
+                    <div class="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+                        <div class="flex items-center gap-3 mb-3">
+                            <span class="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded">Angular</span>
+                            <h3 class="font-bold text-slate-900 text-lg">Monitor Panel</h3>
+                        </div>
+                        <p class="text-sm leading-relaxed">Single Page Application for organizers. Uses REST polling, authorized preview frames and recorded clips to support human review.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Deployment Terminal -->
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-slate-50 p-8 rounded-2xl border border-slate-200">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-4">3. Effortless Deployment</h2>
+                    <p class="leading-relaxed text-slate-600 mb-4">
+                        The entire backend infrastructure is containerized using Docker. You can spin up the API Gateway, AI Microservice, and PostgreSQL database with a single command.
+                    </p>
+                    <a href="/docs/09-deployment-view" class="text-sky-600 font-semibold hover:underline">Read full deployment guide &rarr;</a>
+                </div>
+                
+                <!-- Mock Terminal -->
+                <div class="bg-slate-900 rounded-xl overflow-hidden font-mono text-sm shadow-xl">
+                    <div class="flex items-center px-4 py-3 bg-slate-800 gap-2 border-b border-slate-700">
+                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span class="ml-2 text-slate-400 text-xs">bash - deployment</span>
+                    </div>
+<div class="p-5 text-sky-300 flex flex-col gap-2">
+    <p><span class="text-emerald-400">$</span> git clone https://github.com/andbriha/online-proctoring-system.git</p>
+    <p><span class="text-emerald-400">$</span> cd online-proctoring-system</p>
+    <p><span class="text-emerald-400">$</span> docker compose up -d --build</p>
+    <p class="text-slate-400 mt-2"># Edge Nginx Gateway ready on port 80</p>
+    <p class="text-slate-400"># Core API ready on port 8080</p>
+    <p class="text-slate-400"># AI Engine ready on port 8000</p>
+    <p class="text-slate-400"># PostgreSQL ready on port 5432</p>
+</div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+</Layout>

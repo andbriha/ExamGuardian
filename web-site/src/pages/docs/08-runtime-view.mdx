@@ -1,0 +1,37 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "08. Runtime Dynamics & Sequence Diagrams"
+---
+
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
+# 8. Runtime View: System Dynamics & Sequence Diagrams
+
+The **Runtime View** illustrates the dynamic execution flows and communication patterns between system actors, client components, microservices, and databases during key operational scenarios.
+
+---
+
+## 8.1 Scenario 1: Authentication & Pre-Exam Liveness Verification
+
+This sequence depicts the full initialization phase — from login through active challenge-response liveness verification — before exam questions are revealed:
+
+<Mermaid source={"sequenceDiagram\n    autonumber\n    actor S as Student\n    participant C as Qt Desktop Client\n    participant API as Core API Gateway\n    participant AI as FastAPI AI Engine\n    participant DB as PostgreSQL\n\n    S->>C: Enters Login & Password\n    C->>API: POST /api/Auth/login\n    API->>DB: Query User & BCrypt.Verify(passwordHash)\n    DB-->>API: User {Id, Role: Student, Group: KN-21}\n    API-->>C: {token: JWT, refreshToken, userId}\n\n    Note over C: Phase 1 — OS Lockdown & Hardware Audit\n    C->>C: EnvironmentDetector: CPUID hypervisor bit, BIOS registry, virtual drivers\n    C->>C: ProcessScanner: Snapshot + PE metadata anti-spoofing (SHA-256 cache)\n    C->>C: DisplayChecker: GetSystemMetrics(SM_CMONITORS) — blocks if > 1 monitor\n    C->>C: VirtualCamChecker: DirectShow filter enumeration — blocks OBS Virtual Camera\n\n    alt Virtual Machine or Prohibited Software Detected\n        C-->>S: Error screen: \"Close [App] / disconnect VM to proceed\"\n    else Environment Clean\n        Note over C: Phase 2 — Active Liveness Challenge\n        C->>AI: GET /verify/challenge\n        AI-->>C: {\"task\": \"turn_right\"}\n        C-->>S: \"Please turn your head to the RIGHT\"\n        S->>C: Moves head as instructed (captured via QVideoSink)\n        C->>AI: POST /verify/identity-and-liveness (frame + task + Bearer JWT)\n        AI->>AI: Decode JWT → studentId → load images/{studentId}.jpg\n        AI->>AI: DeepFace Facenet512 cosine match (threshold < 0.68)\n        AI->>AI: MediaPipe: measure yaw delta vs. \"turn_right\" gesture\n        AI-->>C: {\"verified\": true, \"stage\": \"ok\", \"id_distance\": 0.43}\n        C->>API: POST /api/ExamSessions/start {examId, studentId}\n        API->>DB: INSERT ExamSession (IsFinished=false, StartTime=now())\n        API-->>C: ExamSession {id: 42, examId, startTime}\n        C->>API: GET /api/Exams/{examId}\n        API-->>C: Exam with Questions & Options payload\n        C-->>S: Exam interface opens (fullscreen kiosk, InputBlocker activated)\n    end"} />
+
+---
+
+## 8.2 Scenario 2: Active Exam Session & Continuous AI Proctoring
+
+During the active exam the Qt client operates in full lockdown while media feeds and telemetry are continuously audited in parallel:
+
+<Mermaid source={"sequenceDiagram\n    autonumber\n    actor S as Student\n    participant C as Qt Desktop Client\n    participant API as Core API Gateway\n    participant AI as FastAPI AI Engine\n    participant M as Angular Monitor Panel\n\n    Note over C: InputBlocker active — WH_KEYBOARD_LL hooks suppress Alt+Tab, Win, PrintScreen\n\n    loop Continuous Media Chunking (Every 60 Seconds)\n        C->>C: QVideoSink accumulates frames → encode H.264/AAC → chunk_N.mp4\n        C->>API: POST /api/video/upload-chunk (multipart: sessionId, chunkIndex, file)\n        API->>API: Save to ExamVideos/{sessionId}/chunk_{N}.mp4\n        API-->>C: 200 OK\n    end\n\n    loop High-Frequency Keyframe Inference (Every 1-2 Seconds)\n        C->>AI: POST /analyze/frame?session_id=42&student_id=...&relative_ts=142 (Base64 JPEG)\n\n        par Parallel Model Inference\n            AI->>AI: MediaPipe Face Landmarker → 468 3D landmarks → Yaw/Pitch/Roll (PnP)\n            AI->>AI: YOLOv8 Nano → object detection (phone, extra person, book, laptop)\n            AI->>AI: Ear Canal Crop (landmarks 234 & 454) → HSV earpiece analysis\n        end\n\n        alt Anomaly Detected (e.g. Yaw > +0.19 sustained > 1.5s)\n            AI->>API: POST /api/Violations (X-Api-Key header)<br/>{sessionId, violationType: \"looking_away_right\", confidence: 0.91, relativeTimestampSeconds: 142}\n            API->>DB: INSERT ViolationAlert\n            API->>M: SignalR push: new violation alert (if connected)\n            M->>M: Render alert toast on proctor dashboard\n        end\n    end\n\n    loop Audio Analysis (Periodic PCM chunks)\n        C->>AI: POST /analyze/audio (16kHz mono PCM bytes)\n        AI->>AI: WebRTC VAD (30ms frames, mode=3) → cumulative speech duration\n        alt Speech > 3.0s threshold\n            AI->>API: POST /api/Violations {violationType: \"voice_activity\"}\n        end\n    end\n\n    loop Monitor Alert Polling (Every 8 Seconds)\n        M->>API: GET /api/Violations/unreviewed\n        API-->>M: List of new violation alerts\n        M->>M: Update violation timeline markers\n    end"} />
+
+---
+
+## 8.3 Scenario 3: Submission, Post-Exam Audit & Protocol Generation
+
+This sequence details the exam conclusion, examiner video scrubbing, and official report generation:
+
+<Mermaid source={"sequenceDiagram\n    autonumber\n    actor S as Student\n    actor P as Examiner / Proctor\n    participant C as Qt Desktop Client\n    participant API as Core API Gateway\n    participant M as Angular Monitor Panel\n    participant DB as PostgreSQL\n\n    alt Option A: Student Submits Test Answers\n        S->>C: Clicks \"Submit Exam\" (or timer expires)\n        C->>API: POST /api/Exams/{examId}/submit<br/>{sessionId: 42, answers: [{questionId, selectedOptionIndex}]}\n        API->>DB: Score answers vs. CorrectIndex per question → compute percentage\n        API->>DB: UPDATE ExamSession: IsFinished=true, EndTime=now(), Score=85.0\n        API-->>C: {sessionId: 42, score: 85.0, isFinished: true}\n    else Option B: Proctor Terminates Session\n        P->>M: Clicks \"Terminate Session\" button\n        M->>API: PATCH /api/ExamSessions/{id}/finish?score=0\n        API->>DB: UPDATE ExamSession: IsFinished=true, EndTime=now()\n    end\n\n    C->>C: InputBlocker: UnhookWindowsHookEx → unlock OS keyboard\n    C->>C: Finalize & flush last video chunk\n    C->>API: POST /api/video/upload-chunk (final chunk)\n\n    Note over P, M: Post-Exam Forensic Audit\n    P->>M: Opens Reports Hub → selects student session\n    M->>API: GET /api/video/{sessionId}/chunks\n    API-->>M: Chunk list [{index, url: \"/api/video/42/0\"}, ...]\n    M->>API: GET /api/Violations/by-session/{sessionId}\n    API-->>M: All violations with relativeTimestampSeconds\n\n    M->>M: Render multi-chunk virtual timeline with colored pins<br/>(Red=Critical, Yellow=Warning)\n    P->>M: Clicks violation pin at 02:22 → player seeks to chunk_2.mp4 @ t_local=22s\n    P->>M: Clicks \"Print Protocol\" → opens printable integrity report\n\n    Note over P: Violation Review Workflow\n    P->>M: Opens ViolationDetailComponent → reviews AI metadata (yaw angle, object label)\n    M->>API: PATCH /api/Violations/{id}/review\n    API->>DB: SET IsReviewed=true"} />

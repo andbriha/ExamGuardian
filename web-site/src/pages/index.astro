@@ -1,0 +1,124 @@
+---
+import Layout from '../layouts/Layout.astro'
+import Navigation from '../components/Navigation.astro'
+import Intro from '../components/Intro.astro'
+
+const threats = [
+    { title: "Identity Spoofing", desc: "Checks identity against an enrolled photograph and requests a timed pose transition. Attack resistance requires validation." },
+    { title: "Hidden Mobile Devices", desc: "Flags phones visible in the camera image for examiner review. Objects outside the image cannot be detected." },
+    { title: "Screen Broadcasting", desc: "Checks known remote access and sharing applications, records the screen and reports focus changes." },
+    { title: "Virtual Machines", desc: "Checks several virtual environment indicators before and during an attempt. External hardware remains a limitation." }
+];
+
+const hybridFeatures = [
+    {
+        category: "Low-Level OS Control",
+        items: [
+            "Virtual Machine detection via CPUID and registry artifacts.",
+            "Known application checks using names, executable metadata and hashes.",
+            "System-level blocking of keyboard interrupts and window switching.",
+            "Detection of screen capture tools and RDP connections."
+        ]
+    },
+    {
+        category: "Intelligent Media Analysis",
+        items: [
+            "Periodic identity checks against the enrolled reference (DeepFace).",
+            "Bound, expiring pose challenges and anti-spoofing checks; effectiveness requires evaluation.",
+            "Detection of prohibited objects like phones or extra people (YOLOv8).",
+            "Speech activity checks (VAD), subject to the exam policy."
+        ]
+    }
+];
+
+const businessValues = [
+    {
+        title: "Zero Per-Session Fees",
+        desc: "Unlike commercial platforms that charge per student, our system is highly optimized. Run efficient AI models without the burden of recurring licensing costs.",
+        icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+    },
+    {
+        title: "Institutional Data Control",
+        desc: "Store exam data on infrastructure you manage. Configure access, TLS, backup and an explicit retention policy.",
+        icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+    },
+    {
+        title: "One-Click Export",
+        desc: "Review the academic score, evidence delivery and examiner verdict separately. Print the current report using your browser.",
+        icon: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+    }
+];
+---
+<Layout title="ExamGuardian | AI-Powered Online Proctoring">
+    <main class="container mx-auto px-4 py-16 flex flex-col gap-24 max-w-6xl">
+        
+        <Intro />
+        
+        <!-- Business Value Section -->
+        <section class="flex flex-col gap-10">
+            <div class="text-center max-w-3xl mx-auto flex flex-col gap-4">
+                <h2 class="text-3xl md:text-4xl font-bold text-slate-900">Built for Institutions</h2>
+                <p class="text-lg text-slate-600">Cost-effective, secure, and fully under your control.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {businessValues.map(value => (
+                    <div class="bg-slate-50 p-8 rounded-2xl border border-slate-200 flex flex-col gap-4 text-center items-center">
+                        <div class="w-14 h-14 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center mb-2">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d={value.icon}></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900">{value.title}</h3>
+                        <p class="text-slate-600 leading-relaxed">{value.desc}</p>
+                    </div>
+                ))}
+            </div>
+        </section>
+
+        <!-- The Problem: 4 Vectors -->
+        <section class="flex flex-col gap-10">
+            <div class="text-center max-w-3xl mx-auto flex flex-col gap-4">
+                <h2 class="text-3xl md:text-4xl font-bold text-slate-900">The 4 Vectors of Academic Dishonesty</h2>
+                <p class="text-lg text-slate-600">Identity, environment and media checks help the examiner inspect an attempt and make a reasoned decision.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {threats.map((threat, index) => (
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-3">
+                        <div class="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold text-lg mb-2">
+                            0{index + 1}
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800">{threat.title}</h3>
+                        <p class="text-slate-600 text-sm leading-relaxed">{threat.desc}</p>
+                    </div>
+                ))}
+            </div>
+        </section>
+
+        <!-- The Solution: Hybrid Architecture -->
+        <section class="bg-slate-900 rounded-3xl p-8 md:p-16 text-white flex flex-col gap-12">
+            <div class="text-center max-w-3xl mx-auto flex flex-col gap-4">
+                <h2 class="text-3xl md:text-4xl font-bold">Proposed Hybrid Architecture</h2>
+                <p class="text-lg text-slate-300">By combining a native desktop client with isolated AI microservices, the system neutralizes all four violation vectors simultaneously—setting a new standard beyond existing commercial solutions.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {hybridFeatures.map(feature => (
+                    <div class="bg-slate-800 p-8 rounded-2xl border border-slate-700">
+                        <h3 class="text-2xl font-bold text-sky-400 mb-6">{feature.category}</h3>
+                        <ul class="flex flex-col gap-4">
+                            {feature.items.map(item => (
+                                <li class="flex items-start gap-3 text-slate-200">
+                                    <svg class="w-6 h-6 text-sky-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    <span class="leading-relaxed">{item}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ))}
+            </div>
+        </section>
+
+    </main>
+</Layout>

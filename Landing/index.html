@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Proctoring System — Клієнт безпечного тестування для студентів</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Header Navigation -->
+    <header class="navbar">
+        <div class="nav-container">
+            <a href="/landing/" class="logo">
+                <span class="logo-icon">🛡️</span>
+                <span class="logo-text">Online Proctoring System</span>
+                <span class="badge badge-student">Студентський портал</span>
+            </a>
+            <nav class="nav-links">
+                <a href="#download">Завантаження</a>
+                <a href="#instructions">Інструкція</a>
+                <a href="#rules">Правила тестування</a>
+                <a href="#prohibited">Заборонене ПЗ</a>
+                <a href="#requirements">Вимоги</a>
+                <a href="#faq">FAQ</a>
+            </nav>
+            <div class="nav-actions">
+                <a href="/login" class="nav-btn-outline">Вхід для викладача &rarr;</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-section" id="download">
+        <div class="container hero-container">
+            <div class="hero-badge">
+                <span class="pulse-dot"></span> Офіційний клієнт для проходження контрольних заходів
+            </div>
+            <h1 class="hero-title">
+                Безпечне середовище тестування <br>
+                <span class="highlight-text">Online Proctoring System Client</span>
+            </h1>
+            <p class="hero-subtitle">
+                Завантажте захищений клієнт для складання екзаменів з автоматичним AI-прокторингом, 
+                біометричною верифікацією особи та контролем фокуса тестування.
+            </p>
+
+            <!-- Download Options Cards -->
+            <div class="download-grid">
+                <!-- Recommended Installer Card -->
+                <div class="download-card featured-card">
+                    <div class="card-badge">Рекомендовано</div>
+                    <div class="card-header">
+                        <div class="card-icon">📦</div>
+                        <div>
+                            <h3 class="card-title">Повний інсталятор Windows</h3>
+                            <p class="card-desc">Inno Setup інсталятор з усіма бібліотеками та ярликами</p>
+                        </div>
+                    </div>
+                    <ul class="card-features">
+                        <li>✔️ Автоматичне налаштування всіх залежностей Qt6 та C++</li>
+                        <li>✔️ Створення ярлика на робочому столі та в меню «Пуск»</li>
+                        <li>✔️ Не потребує встановлення додаткових драйверів</li>
+                    </ul>
+                    <a href="Online_Proctoring_System_Setup.exe" download="Online_Proctoring_System_Setup.exe" class="btn btn-primary btn-large">
+                        <span class="btn-icon">⬇️</span>
+                        <span>
+                            <strong class="btn-text-main">Завантажити інсталятор (.exe)</strong>
+                            <small class="btn-text-sub">Online_Proctoring_System_Setup.exe • ~35.9 МБ • Win 10/11 x64</small>
+                        </span>
+                    </a>
+                </div>
+
+                <!-- Portable Version Card -->
+                <div class="download-card">
+                    <div class="card-header">
+                        <div class="card-icon">⚡</div>
+                        <div>
+                            <h3 class="card-title">Портативний запуск</h3>
+                            <p class="card-desc">Автономний виконуваний файл без інсталяції</p>
+                        </div>
+                    </div>
+                    <ul class="card-features">
+                        <li>✔️ Швидкий запуск без необхідності встановлення</li>
+                        <li>✔️ Зручно для швидкої заміни або лабораторних ПК</li>
+                        <li>✔️ Працює одразу після розпакування</li>
+                    </ul>
+                    <a href="Online_Proctoring_System_Client.exe" download="Online_Proctoring_System_Client.exe" class="btn btn-secondary btn-large">
+                        <span class="btn-icon">💾</span>
+                        <span>
+                            <strong class="btn-text-main">Завантажити клієнт (.exe)</strong>
+                            <small class="btn-text-sub">Online_Proctoring_System_Client.exe • ~17.3 МБ • Win 10/11 x64</small>
+                        </span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- SmartScreen Callout Notice -->
+            <div class="callout-box">
+                <span class="callout-icon">💡</span>
+                <div class="callout-content">
+                    <strong>Попередження Windows SmartScreen:</strong> 
+                    Якщо після завантаження з'явиться вікно «Захист вашого ПК системою Windows» — натисніть 
+                    <span class="kbd">Докладніше</span> (More info), а потім <span class="kbd">Виконати в будь-якому разі</span> (Run anyway). Додаток є повністю безпечним та розроблений для вашого закладу освіти.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Step by Step Instructions Section -->
+    <section class="section instructions-section" id="instructions">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Покроковий гід</span>
+                <h2 class="section-title">Як скласти іспит через Online Proctoring System</h2>
+                <p class="section-subtitle">Пройдіть 5 простих кроків для успішного допуску та здачі тестування</p>
+            </div>
+
+            <div class="steps-grid">
+                <!-- Step 1 -->
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <div class="step-icon">📥</div>
+                    <h3 class="step-title">Завантаження та запуск</h3>
+                    <p class="step-text">
+                        Завантажте <code>Online_Proctoring_System_Setup.exe</code> та запустіть процес встановлення. 
+                        Додаток створить ярлик на робочому столі для швидкого відкриття.
+                    </p>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <div class="step-icon">🔑</div>
+                    <h3 class="step-title">Вхід у свій акаунт</h3>
+                    <p class="step-text">
+                        Введіть персональний логін студента (наприклад, <code>a.kovalenko_42</code>) та пароль, 
+                        видані викладачем або куратором вашої академічної групи.
+                    </p>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <div class="step-icon">📷</div>
+                    <h3 class="step-title">Доступ до камери та мікрофона</h3>
+                    <p class="step-text">
+                        Надайте дозвіл на використання веб-камери та мікрофона. 
+                        Переконайтеся, що обличчя розміщене по центру кадру, а кімната добре освітлена.
+                    </p>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <div class="step-icon">🤖</div>
+                    <h3 class="step-title">Біометрична верифікація</h3>
+                    <p class="step-text">
+                        Система автоматично виконає розпізнавання обличчя та перевірку Liveness (захист від фотографій або масок). 
+                        Після підтвердження відкриється екран іспиту.
+                    </p>
+                </div>
+
+                <!-- Step 5 -->
+                <div class="step-card">
+                    <div class="step-number">5</div>
+                    <div class="step-icon">📝</div>
+                    <h3 class="step-title">Складання тесту</h3>
+                    <p class="step-text">
+                        Відповідайте на питання, не залишаючи поля зору камери. 
+                        Після завершення натисніть кнопку «Завершити іспит» для передачі результатів на сервер.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Strict Rules & Restrictions Section -->
+    <section class="section rules-section" id="rules">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag section-tag-danger">Важливі обмеження</span>
+                <h2 class="section-title">Обов'язкові правила поведінки під час тестування</h2>
+                <p class="section-subtitle">
+                    Порушення будь-якого з цих пунктів автоматично фіксується системою штучного інтелекту 
+                    та негайно надсилається викладачеві в диспетчерську!
+                </p>
+            </div>
+
+            <div class="rules-grid">
+                <!-- Rule 1: Single person -->
+                <div class="rule-card">
+                    <div class="rule-icon-box danger-icon">👤</div>
+                    <div class="rule-content">
+                        <h3>Виключно один студент у кадрі</h3>
+                        <p>У зоні видимості веб-камери не повинні з'являтися сторонні особи або їх частини тіла. Поява іншої людини кваліфікується як спроба підказки.</p>
+                    </div>
+                </div>
+
+                <!-- Rule 2: Constant face visibility -->
+                <div class="rule-card">
+                    <div class="rule-icon-box danger-icon">👁️</div>
+                    <div class="rule-content">
+                        <h3>Постійна видимість обличчя</h3>
+                        <p>Заборонено залишати робоче місце, закривати об'єктив камери чи нахилятися так, що обличчя зникає з кадру більше ніж на кілька секунд.</p>
+                    </div>
+                </div>
+
+                <!-- Rule 3: No headphones or gadgets -->
+                <div class="rule-card">
+                    <div class="rule-icon-box danger-icon">🎧</div>
+                    <div class="rule-content">
+                        <h3>Заборона навушників та смартфонів</h3>
+                        <p>Категорично заборонено використовувати будь-які навушники (дротові, Bluetooth, TWS), тримати поруч смартфони, планшети чи смарт-годинники.</p>
+                    </div>
+                </div>
+
+                <!-- Rule 4: Window locking -->
+                <div class="rule-card">
+                    <div class="rule-icon-box danger-icon">🔒</div>
+                    <div class="rule-content">
+                        <h3>Заборона перемикання вікон</h3>
+                        <p>Клієнт працює у захищеному повноекранному режимі. Спроби натиснути Alt+Tab, клавішу Windows чи згорнути клієнт фіксуються в журналі порушень.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Prohibited Software Section -->
+    <section class="section prohibited-section" id="prohibited">
+        <div class="container">
+            <div class="prohibited-wrapper">
+                <div class="prohibited-header">
+                    <div class="warning-badge">⛔ АКТИВНИЙ МОНІТОРИНГ ПРОЦЕСІВ</div>
+                    <h2>Суворо заборонене стороннє програмне забезпечення</h2>
+                    <p>
+                        Клієнт Online Proctoring System має вбудовану фонову службу сканування запущених процесів Windows. 
+                        <strong>Перед запуском іспиту повністю закрийте наступні додатки</strong>, включаючи фонові процеси в треї:
+                    </p>
+                </div>
+
+                <div class="apps-grid">
+                    <!-- Discord -->
+                    <div class="app-chip">
+                        <span class="app-chip-icon">💬</span>
+                        <div class="app-chip-info">
+                            <strong>Discord</strong>
+                            <code>discord.exe</code>
+                        </div>
+                        <span class="badge badge-danger">Заборонено</span>
+                    </div>
+
+                    <!-- Telegram -->
+                    <div class="app-chip">
+                        <span class="app-chip-icon">✈️</span>
+                        <div class="app-chip-info">
+                            <strong>Telegram</strong>
+                            <code>telegram.exe</code>
+                        </div>
+                        <span class="badge badge-danger">Заборонено</span>
+                    </div>
+
+                    <!-- Viber -->
+                    <div class="app-chip">
+                        <span class="app-chip-icon">🟣</span>
+                        <div class="app-chip-info">
+                            <strong>Viber</strong>
+                            <code>viber.exe</code>
+                        </div>
+                        <span class="badge badge-danger">Заборонено</span>
+                    </div>
+
+                    <!-- WhatsApp -->
+                    <div class="app-chip">
+                        <span class="app-chip-icon">🟢</span>
+                        <div class="app-chip-info">
+                            <strong>WhatsApp</strong>
+                            <code>whatsapp.exe</code>
+                        </div>
+                        <span class="badge badge-danger">Заборонено</span>
+                    </div>
+
+                    <!-- AnyDesk -->
+                    <div class="app-chip">
+                        <span class="app-chip-icon">🖥️</span>
+                        <div class="app-chip-info">
+                            <strong>AnyDesk</strong>
+                            <code>anydesk.exe</code>
+                        </div>
+                        <span class="badge badge-danger">Критично</span>
+                    </div>
+
+                    <!-- TeamViewer -->
+                    <div class="app-chip">
+                        <span class="app-chip-icon">🔄</span>
+                        <div class="app-chip-info">
+                            <strong>TeamViewer</strong>
+                            <code>teamviewer.exe</code>
+                        </div>
+                        <span class="badge badge-danger">Критично</span>
+                    </div>
+
+                    <!-- OBS Studio -->
+                    <div class="app-chip">
+                        <span class="app-chip-icon">📹</span>
+                        <div class="app-chip-info">
+                            <strong>OBS Studio</strong>
+                            <code>obs64.exe</code>
+                        </div>
+                        <span class="badge badge-danger">Заборонено</span>
+                    </div>
+
+                    <!-- UltraVNC / Remote tools -->
+                    <div class="app-chip">
+                        <span class="app-chip-icon">⚙️</span>
+                        <div class="app-chip-info">
+                            <strong>RustDesk / VNC</strong>
+                            <code>rustdesk.exe</code>
+                        </div>
+                        <span class="badge badge-danger">Критично</span>
+                    </div>
+                </div>
+
+                <div class="prohibited-footer">
+                    <p>
+                        ⚠️ <em>У разі виявлення запущеного забороненого процесу під час іспиту на екрані з'явиться червоне попередження, 
+                        а викладач отримає миттєве сповіщення із зазначенням назви програми. Іспит може бути анульовано.</em>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technical Requirements Section -->
+    <section class="section requirements-section" id="requirements">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Чек-лист</span>
+                <h2 class="section-title">Системні та технічні вимоги</h2>
+                <p class="section-subtitle">Переконайтеся, що ваш комп'ютер відповідає мінімальним вимогам для стабільної роботи</p>
+            </div>
+
+            <div class="req-grid">
+                <div class="req-item">
+                    <div class="req-item-icon">💻</div>
+                    <div class="req-item-text">
+                        <h4>Операційна система</h4>
+                        <p>Windows 10 або Windows 11 (64-розрядна версія з актуальними оновленнями)</p>
+                    </div>
+                </div>
+
+                <div class="req-item">
+                    <div class="req-item-icon">📷</div>
+                    <div class="req-item-text">
+                        <h4>Веб-камера</h4>
+                        <p>Роздільна здатність від 720p (HD). Камера повинна бути розташована прямо навпроти обличчя</p>
+                    </div>
+                </div>
+
+                <div class="req-item">
+                    <div class="req-item-icon">🎙️</div>
+                    <div class="req-item-text">
+                        <h4>Мікрофон</h4>
+                        <p>Вбудований або зовнішній мікрофон для аналізу аудіофону в приміщенні</p>
+                    </div>
+                </div>
+
+                <div class="req-item">
+                    <div class="req-item-icon">🌐</div>
+                    <div class="req-item-text">
+                        <h4>Інтернет-з'єднання</h4>
+                        <p>Стабільне підключення зі швидкістю від 5 Мбіт/с (бажано кабельне або стабільний Wi-Fi)</p>
+                    </div>
+                </div>
+
+                <div class="req-item">
+                    <div class="req-item-icon">💡</div>
+                    <div class="req-item-text">
+                        <h4>Освітлення робочого місця</h4>
+                        <p>Джерело світла має падати спереду на обличчя. Уникайте яскравого вікна чи лампи позаду вас</p>
+                    </div>
+                </div>
+
+                <div class="req-item">
+                    <div class="req-item-icon">🔇</div>
+                    <div class="req-item-text">
+                        <h4>Тиша в кімнаті</h4>
+                        <p>Відсутність сторонніх розмов, телевізора, музики або звуків месенджерів на фоні</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section (Accordion) -->
+    <section class="section faq-section" id="faq">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag">Підтримка</span>
+                <h2 class="section-title">Часті запитання (FAQ)</h2>
+                <p class="section-subtitle">Відповіді на найпоширеніші запитання студентів перед початком тестування</p>
+            </div>
+
+            <div class="faq-list">
+                <!-- FAQ 1 -->
+                <div class="faq-item">
+                    <button class="faq-question">
+                        <span>Що робити, якщо Windows SmartScreen блокує запуск файлу?</span>
+                        <span class="faq-arrow">▾</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Оскільки додаток є внутрішньою розробкою навчального закладу без платного сертифіката цифрового підпису Microsoft, 
+                            Windows SmartScreen показує стандартне попередження. Щоб продовжити:
+                        </p>
+                        <ol>
+                            <li>Натисніть на посилання <strong>«Докладніше»</strong> (More info) у вікні попередження.</li>
+                            <li>Натисніть кнопку <strong>«Виконати в будь-якому разі»</strong> (Run anyway).</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- FAQ 2 -->
+                <div class="faq-item">
+                    <button class="faq-question">
+                        <span>Чому система показує помилку розпізнавання обличчя (face_mismatch)?</span>
+                        <span class="faq-arrow">▾</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Помилка виникає, якщо штучний інтелект не може зіставити ваше обличчя з еталонним фото в базі даних. Що перевірити:
+                        </p>
+                        <ul>
+                            <li>Увімкніть додаткове світло в кімнаті, щоб обличчя було чітко видно.</li>
+                            <li>Зніміть темні окуляри, головний убір, маску.</li>
+                            <li>Дивіться прямо в об'єктив камери на відстані 50-70 см.</li>
+                            <li>Переконайтеся, що камера не зайнята іншою програмою (Zoom, Google Meet, Skype).</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- FAQ 3 -->
+                <div class="faq-item">
+                    <button class="faq-question">
+                        <span>Де взяти логін і пароль для входу в Online Proctoring System Client?</span>
+                        <span class="faq-arrow">▾</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Обліковий запис студента створюється викладачем або адміністратором через панель управління. 
+                            Логін зазвичай формується у форматі <code>i.ivanov_42</code> (ініціал, прізвище та код групи). 
+                            Зверніться до свого викладача перед початком сесії для отримання даних для входу.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- FAQ 4 -->
+                <div class="faq-item">
+                    <button class="faq-question">
+                        <span>Що станеться, якщо у мене короткочасно зникне інтернет під час тесту?</span>
+                        <span class="faq-arrow">▾</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Клієнт Online Proctoring System розроблений зі збереженням локального стану. При короткочасному обриві зв'язку 
+                            додаток спробує автоматично відновити підключення до сервера. Проте намагайтеся заздалегідь забезпечити 
+                            стабільне з'єднання, оскільки тривала втрата зв'язку може бути зафіксована диспетчером як аномалія.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- FAQ 5 -->
+                <div class="faq-item">
+                    <button class="faq-question">
+                        <span>Чи можу я вийти з кімнати або відійти від комп'ютера під час іспиту?</span>
+                        <span class="faq-arrow">▾</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Ні. Будь-яке залишення робочого місця або відсутність обличчя в кадрі миттєво фіксується як серйозне 
+                            порушення правил прокторингу. Якщо виникає форс-мажор, попередьте викладача через встановлений канал зв'язку.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- FAQ 6 -->
+                <div class="faq-item">
+                    <button class="faq-question">
+                        <span>Що робити, якщо на початку іспиту виник збій камери?</span>
+                        <span class="faq-arrow">▾</span>
+                    </button>
+                    <div class="faq-answer">
+                        <p>
+                            Якщо через технічну несправність камери або мікрофона іспит не розпочався, спроба не зараховується 
+                            як зданий іспит з оцінкою 0. Вона автоматично помічається як перервана / технічний збій, 
+                            і викладач зможе надати вам повторну спробу після налаштування пристроїв.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container footer-container">
+            <div class="footer-left">
+                <div class="logo">
+                    <span class="logo-icon">🛡️</span>
+                    <span class="logo-text">Online Proctoring System</span>
+                </div>
+                <p class="footer-tagline">Інтелектуальна система автоматичного прокторингу та безпечного тестування</p>
+                <p class="footer-copy">&copy; 2026 Online Proctoring System. Усі права захищено.</p>
+            </div>
+            <div class="footer-right">
+                <div class="footer-links-group">
+                    <h4>Навігація</h4>
+                    <a href="#download">Завантажити клієнт</a>
+                    <a href="#instructions">Інструкція для студента</a>
+                    <a href="#rules">Правила та обмеження</a>
+                    <a href="#prohibited">Заборонені процеси</a>
+                </div>
+                <div class="footer-links-group">
+                    <h4>Адміністрація</h4>
+                    <a href="/login">Вхід для викладачів</a>
+                    <a href="/login">Диспетчерська панель</a>
+                    <a href="#requirements">Технічні вимоги</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Interactive Script for FAQ and Smooth Scroll -->
+    <script>
+        // Interactive Accordion for FAQ
+        document.querySelectorAll('.faq-question').forEach(button => {
+            button.addEventListener('click', () => {
+                const item = button.parentElement;
+                const isActive = item.classList.contains('active');
+                
+                // Close all items
+                document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('active'));
+                
+                // If it wasn't active, open it
+                if (!isActive) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // Open first FAQ item by default
+        const firstFaq = document.querySelector('.faq-item');
+        if (firstFaq) {
+            firstFaq.classList.add('active');
+        }
+    </script>
+</body>
+</html>

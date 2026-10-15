@@ -1,0 +1,7 @@
+{
+  "yolov8n.pt": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+  "models/face_landmarker.task": "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+  "deepface/facenet512_weights.h5": "3f76b5117a9ca574d536af8199e6720089eb4ad3dc7e93534496d88265de864f",
+  "deepface/2.7_80x80_MiniFASNetV2.h5": "da0de51d44dc3d9af808c6c2f6fe97dd174774fa66881c9fd291bde1a1174e04",
+  "deepface/4_0_0_80x80_MiniFASNetV1SE.h5": "d2f4280c30d88dbd02d0d6691dcfbdd389316de398f94bb6cba30144e23889b0"
+}

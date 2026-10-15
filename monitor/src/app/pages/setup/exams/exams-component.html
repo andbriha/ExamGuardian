@@ -1,0 +1,76 @@
+<div class="exams-dashboard">
+  <div class="dashboard-header">
+    <div class="header-titles">
+      <h2>📚 Мої іспити</h2>
+      <p class="subtitle">Управління контрольними заходами та моніторинг сесій</p>
+    </div>
+
+    <button class="btn-primary" routerLink="/create-exam">
+      + Створити іспит
+    </button>
+  </div>
+
+  @if (errorMessage) {
+    <div style="padding: 16px 20px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; margin-bottom: 24px; color: #b91c1c;">
+      <p>{{ errorMessage }}</p>
+      <a routerLink="/login" style="display: inline-block; margin-top: 8px; color: #1a56db; font-weight: 600;">Увійти до системи &rarr;</a>
+    </div>
+  }
+
+  @if (isLoading) {
+    <div class="loading-state">
+      <span class="spinner"></span> Завантаження даних...
+    </div>
+  } @else if (exams.length === 0 && !errorMessage) {
+    <div class="empty-state card">
+      <h3>У вас ще немає створених іспитів</h3>
+      <p>Натисніть кнопку "+ Створити іспит", щоб додати свій перший контрольний захід.</p>
+    </div>
+  } @else {
+    <div class="exams-grid">
+      @for (exam of exams; track exam.id) {
+        <div class="exam-card card">
+
+          <div class="card-top">
+            <div class="status-badge" [ngClass]="exam.status">
+              {{ exam.status === 'active' ? '🟢 Активний' :
+                 exam.status === 'upcoming' ? '⏳ Заплановано' : '⚪ Завершено' }}
+            </div>
+            <div class="exam-actions">
+              <button class="btn-icon" (click)="copyLink(exam.id)" title="Скопіювати ID іспиту">🔗</button>
+              <button class="btn-icon btn-danger" (click)="deleteExam(exam.id)" title="Видалити">🗑</button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <h3 class="exam-title">{{ exam.title }}</h3>
+            <p class="exam-desc">{{ exam.description || 'Немає опису' }}</p>
+
+            <div class="exam-meta">
+              <div class="meta-item">
+                <span class="icon">📅</span>
+                <span>Початок: {{ exam.startTime ? formatStart(exam) : '—' }} ({{ exam.timeZoneId || 'Europe/Chisinau' }})<br>Кінець: {{ exam.startTime ? formatEnd(exam) : '—' }}</span>
+              </div>
+              <div class="meta-item">
+                <span class="icon">⏱</span>
+                <span>{{ exam.durationMinutes }} хв</span>
+              </div>
+              <div class="meta-item">
+                <span class="icon">📝</span>
+                <span>{{ exam.questionsCount }} питань</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <button class="btn-secondary full-width"
+                    [routerLink]="['/monitor', exam.id]">
+              👁 Переглянути сесії (Прокторинг)
+            </button>
+          </div>
+
+        </div>
+      }
+    </div>
+  }
+</div>

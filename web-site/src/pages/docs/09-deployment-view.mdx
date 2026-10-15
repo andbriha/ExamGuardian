@@ -1,0 +1,83 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "09. Deployment & Infrastructure Architecture"
+---
+
+import Mermaid from '../../components/Mermaid.astro';
+
+> This chapter defines the system architecture and operating contract. The [implementation and validation record](/docs/11-current-contract) reports which behavior has been verified in the current checkout.
+
+# 9. Deployment View: Development and Production
+
+ExamGuardian runs in two isolated environments. Both environments run the same API, AI, panel and landing page. Development adds reload services, Astro documentation and a native client menu for disabling local restrictions. Production excludes that menu. Neither mode seeds sample data.
+
+## 9.1 Environment topology
+
+<Mermaid source={"flowchart TB\n  Launcher[\"run.ps1\"] -->|\"Default\"| Dev[\"Development project\"]\n  Launcher -->|\"--production / Cyrillic alias\"| Prod[\"Production project\"]\n  Dev --> DevClient[\"Native DEV Qt client and override window\"]\n  Dev --> DevStack[\"API / AI / PostgreSQL / media / SQLite\"]\n  Dev --> Docs[\"Astro documentation :4321\"]\n  Prod --> ProdClient[\"Production Qt client \u2014 no override code\"]\n  Prod --> ProdStack[\"Immutable API / AI / PostgreSQL / media / SQLite\"]\n  Prod --> TLS[\"Nginx HTTPS origin\"]\n  DevStack -.->|\"Independent data, networks and keys\"| ProdStack"} />
+
+| Property | Development | Production |
+|---|---|---|
+| Default launch | `./run.ps1` | `./run.ps1 --production` |
+| Alternate production argument | — | `--продакшн` |
+| Compose project | `examguardian-dev` | `examguardian-prod` |
+| API environment | `Development` | `Production` |
+| Application origin | `http://127.0.0.1:8081` | Configured institution HTTPS origin |
+| Documentation | Astro service at `http://127.0.0.1:4321` | No Astro development service |
+| Source updates | Source mounts and watch/reload | Immutable versioned images |
+| Student client | DEV build with controlled overrides | Production build without override resources |
+| Accounts and signing keys | Independent accounts and keys | Institution accounts and independent keys |
+| Database, media and SQLite | Development volumes | Production volumes |
+
+The two projects run concurrently. Networks, secrets, data volumes, dependency volumes and client queues do not cross the environment boundary. Fixed `container_name` values and shared external data volumes are excluded from the base topology.
+
+## 9.2 Launcher and configuration
+
+`run.ps1` parses the environment before touching Docker. No argument selects development; either production argument selects production. Unknown/conflicting arguments fail. A failed production launch never falls back to development.
+
+The launcher resolves repository paths, loads one explicit environment file, validates Docker/ports/prerequisites, and invokes Compose with explicit project name, env file and profile files. Readiness checks cover PostgreSQL, Core and AI. Documentation starts independently of model warmup. Startup prints environment, origins, build versions, health and log/stop commands without disclosing secrets.
+
+| File | Responsibility |
+|---|---|
+| `run.ps1` | Environment selection and entry point |
+| `scripts/Start-Environment.ps1` | Prerequisite validation, Compose launch and readiness |
+| `scripts/Stop-Environment.ps1` | Stop only the selected project while preserving its volumes |
+| `compose.base.yml` | Shared service topology and internal network relationships |
+| `compose.dev.yml` | Source mounts, reload processes, loopback ports and Astro service |
+| `compose.production.yml` | Immutable images, production environment, HTTPS and restricted ingress |
+| `.env.dev.example` / `.env.production.example` | Separate configuration contracts; no real secrets |
+
+Development initialization generates missing random secrets and preserves an existing configuration. Production requires configured signing/API keys, bootstrap credentials where applicable, HTTPS origin and certificate paths. Invalid configuration stops with missing field names, not secret values.
+
+A normal stop never uses `down --volumes`. Existing `proctoring_*` installations are migrated separately after a checkpoint and restore verification.
+
+## 9.3 Development services and automatic documentation
+
+Core uses `dotnet watch`; AI uses reload; Angular uses its development server. Source edits update the corresponding service without rebuilding the complete stack. Dependency changes rebuild the affected image.
+
+The documentation service uses `web-site/Dockerfile.dev`, Node 24, the npm lockfile and a separate dependency volume. It runs `npm run dev -- --host 0.0.0.0 --port 4321 --ignore-lock` inside the container. The host mapping is `127.0.0.1:4321:4321`; the host port is configurable if another local service occupies it. Source changes update the documentation automatically. Its health check uses the documentation entry point.
+
+Compose owns the container process lifecycle, so Astro uses `--ignore-lock` to avoid stale host/PID lock records after container restarts. Documentation starts as a background Compose service. Opening its URL in a browser is optional. Production can distribute ordinary static documentation separately, but it runs no Astro dev server or development documentation port.
+
+Qt runs natively for real camera, microphone, screen and OS access. The development launcher selects its DEV build and development origin. A missing client produces a build command instead of launching a stale production installer.
+
+## 9.4 Production boundary and network routing
+
+Nginx exposes the configured HTTPS origin and routes `/api/` to Core and `/verify/` and `/analyze/` to AI. Qt uploads frames/audio through this origin. AI validates active attempts with Core and delivers observations through its durable outbox. PostgreSQL and AI have no public direct port. Refresh cookies are secure in production.
+
+Core and AI use the same implementation in both profiles and expose no development admission routes. The Qt production package contains no override QML, registration or shortcut handler. Environment variables, QSettings and CLI flags cannot activate code that is absent from the artifact. Both client builds require the ordinary identity admission.
+
+Production uses reviewed build manifests and matching installers. The portal distributes the production client; the same portal serves the DEV installer in development through an environment-specific file mount. Neither installer is treated as current merely because an older binary exists in the portal directory.
+
+## 9.5 Persistence, backup and retention
+
+PostgreSQL stores accounts, exam snapshots, answers, outcomes and review history. Camera/screen files and their timing/hash sidecars use media storage. AI previews, reference snapshots and event images use shared image storage; its durable outbox and challenge state use SQLite. Each environment owns its storage.
+
+A checkpoint includes PostgreSQL, media and online SQLite snapshots with checksums. Restore verifies integrity and creates an isolated target; switching the working deployment is a separate operation. Retention remains disabled until an administrator configures a period, previews the plan and applies it. Only old finished/reviewed attempts qualify; media expiration preserves answers, scores and decision history.
+
+## 9.6 Verifying environment isolation
+
+Verification exercises concurrent launch and independent stop, persistence after restart, distinct keys/databases/queues, and absence of synthetic admission routes in both profiles. Artifact checks confirm absent development resources and are supplemented by direct runtime requests. A client banner or hidden button is not the production security boundary.
+
+The verified state of the checkout remains documented separately in [Current implementation and validation](/docs/11-current-contract).
+
+The landing HTML, styles and content are shared from `Landing/`. The development profile changes only the installer served at the normal download URL. No custom DEV landing page is maintained.
