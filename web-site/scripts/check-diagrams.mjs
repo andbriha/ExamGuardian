@@ -7,10 +7,10 @@ globalThis.document = window.document;
 const { default: mermaid } = await import('mermaid');
 
 mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
-const pages = new URL('../src/pages/docs/', import.meta.url);
+const pages = new URL('../src/pages/', import.meta.url);
 let count = 0;
 let failures = 0;
-for (const name of await readdir(pages)) {
+for (const name of await readdir(pages, { recursive: true })) {
   if (!name.endsWith('.mdx')) continue;
   const source = await readFile(new URL(name, pages), 'utf8');
   for (const match of source.matchAll(/<Mermaid source=\{("(?:\\.|[^"\\])*")\} \/>/g)) {

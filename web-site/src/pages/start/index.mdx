@@ -1,0 +1,194 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "Launch: development & production"
+---
+
+# Launch the system
+
+This guide starts the server stack and connects the native student client. Run commands in **PowerShell from the repository root**. For the exam workflow after startup, see [Run an exam](/guide).
+
+**On this page:** [Prerequisites](#prerequisites) · [Development](#development) · [Production](#production) · [Client](#native-client) · [Operations](#operations) · [Troubleshooting](#troubleshooting)
+
+## Choose an environment
+
+| | Development | Production |
+|---|---|---|
+| Purpose | Local development and functional checks | Configured institutional deployment |
+| Start | `./run.ps1` | `./run.ps1 --production` |
+| Configuration | `.env.dev`, generated if missing | `.env.production`, prepared manually |
+| Compose project | `examguardian-dev` | `examguardian-production` |
+| Application | `http://127.0.0.1:8081` by default | Your HTTPS `PUBLIC_ORIGIN` |
+| Documentation | Separate local Astro service | No documentation dev server |
+| Native client | Development build with local overrides | Production build without overrides |
+| Storage | Own database, media and AI state volumes | Own database, media and AI state volumes |
+
+Both environments use the same examination logic. Neither seeds demo exams by default. A failed production launch never switches to development. The root `docker-compose.yml` and `.env` are a **legacy path**; do not use bare `docker compose up` for these environments.
+
+## Prerequisites
+
+- Docker Engine / Docker Desktop running Linux containers, with Docker Compose supporting the `!reset` and `!override` YAML tags used by the overlays.
+- PowerShell and a complete checkout of this repository.
+- Internet access for the first image build, dependencies, and model downloads. Initial model loading can take time.
+- Available application ports; production also needs a hostname and certificate. Choose storage capacity according to recording duration and participant count; classroom capacity has not yet been established.
+- To build the native Windows client: Qt **6.10.1 MinGW**, matching MinGW compiler, CMake, and Ninja. Server containers do not require a host Qt installation.
+
+```powershell
+docker version
+docker compose version
+```
+
+Docker must report a running server. The examples below do not require installing .NET, Python, or Node on the host for the containerized services.
+
+## Development
+
+### 1. Validate and initialize
+
+```powershell
+./run.ps1 --check
+```
+
+If missing, `.env.dev` is created from `.env.dev.example` with independent random secrets. Existing configuration is preserved. This check validates required fields and Compose configuration without changing containers; it can still create the environment file.
+
+Open `.env.dev` locally. `APP_PORT` defaults to `8081`. `DOCS_PORT` starts at `4321`; on Windows the initializer chooses an unused listening port in `4321–4331`. The selected value is saved, so it is not recalculated on every launch. Keep generated credentials private.
+
+### 2. Start and confirm readiness
+
+```powershell
+./run.ps1
+./run.ps1 --status
+```
+
+Development starts the database and documentation first, then builds and starts the full stack. The launcher waits for readiness and reports a failure if the stack does not become ready within its wait window. A documentation page being available does not mean the AI models are ready.
+
+Expected services: `db`, `api`, `ai_service`, `monitor`, `nginx`, and `docs`. Inspect service health with `--status`. The launcher prints the application and documentation URLs.
+
+| Destination | Default location |
+|---|---|
+| Examiner sign-in | `http://127.0.0.1:8081/login` |
+| Student portal | `http://127.0.0.1:8081/landing/` |
+| Documentation | `http://127.0.0.1:<DOCS_PORT>/` |
+
+Replace the application port if you changed `APP_PORT`. Documentation and the application are **different origins**: append `/landing/` to the application origin, not the docs origin.
+
+### 3. Sign in and connect a client
+
+Use `BOOTSTRAP_EXAMINER_LOGIN` and `BOOTSTRAP_EXAMINER_PASSWORD` from `.env.dev` for the initial examiner account. An empty installation needs students, reference photos, and an exam before a student can begin. Follow [Run an exam](/guide).
+
+```powershell
+./scripts/Start-Client.ps1
+```
+
+This script checks AI capabilities, builds the development client, and selects the application origin from `.env.dev`. It does not start the server. The DEV controls appear at startup; `Ctrl+Shift+D` reopens them. Overrides cover local environment restrictions, not identity admission, recording, or server rules.
+
+Core, AI, Angular, and documentation use source watches/mounts. Rebuild after dependency or container configuration changes. Qt changes require another native build.
+
+## Production
+
+### 1. Prepare explicit configuration
+
+If `.env.production` does not already exist:
+
+```powershell
+Copy-Item .env.production.example .env.production
+```
+
+Edit it before launch. Preserve an existing installation's configuration instead of replacing it with the example.
+
+| Setting | What to configure |
+|---|---|
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Production database identity and a random password |
+| `JWT__KEY` | Independent random signing key, at least 32 characters |
+| `JWT__ISSUER`, `JWT__AUDIENCE` | Production token identifiers |
+| `AiService__ApiKey` | Independent random internal service key |
+| `BOOTSTRAP_EXAMINER_LOGIN`, `BOOTSTRAP_EXAMINER_PASSWORD` | Initial examiner credentials |
+| `PUBLIC_ORIGIN` | Actual HTTPS origin used by clients, for example `https://exams.your-institution.org` |
+| `TLS_DIRECTORY` | Directory containing `fullchain.pem` and `privkey.pem`; use an absolute path |
+| `HTTP_PORT`, `HTTPS_PORT`, `APP_BIND_ADDRESS` | Reachable listener ports/address; defaults are 80, 443, and `0.0.0.0` |
+| `EXAM_TIME_ZONE` | IANA timezone for the exam schedule; default `Europe/Chisinau` |
+
+Replace every `REPLACE_…` value and the example hostname. Keep `SEED_DEMO_EXAM=false`. The certificate must cover your hostname and be trusted by the client machines. If using a nonstandard HTTPS port, include it in `PUBLIC_ORIGIN`.
+
+`PUBLIC_ORIGIN` tells the client launcher which address to use; it does not create DNS records or obtain a certificate. The launcher checks the HTTPS URL and certificate file presence, not certificate validity or external reachability.
+
+### 2. Validate, then launch
+
+```powershell
+./run.ps1 --production --check
+./run.ps1 --production
+./run.ps1 --production --status
+```
+
+The Cyrillic alias `--продакшн` is also supported. Production uses `compose.base.yml` plus `compose.production.yml`, project `examguardian-production`, and its own volumes. Expected services are `db`, `api`, `ai_service`, and `nginx`.
+
+Open your HTTPS origin with `/login` for the examiner panel or `/landing/` for the student portal. Check these from a client machine, including certificate trust. Sign in with the initial credentials from `.env.production`. Bootstrap settings are not a password reset procedure for an existing database.
+
+### 3. Publish a matching native release
+
+Build and verify the production installer as described below. Test a complete attempt on the target devices: admission, answer saving, camera/screen delivery, submission, and examiner review. A healthy container stack alone does not validate real-device recording or model accuracy. See [current validation limits](/docs/11-current-contract).
+
+## Native client
+
+The Qt application runs on the student's machine, outside Docker, for camera, microphone, screen, and OS access.
+
+For a local production-flavor build connected to `.env.production`:
+
+```powershell
+./scripts/Start-Client.ps1 -Production
+```
+
+`Start-Client.ps1` builds a Debug executable for the chosen flavor. For distribution, build a Release package instead:
+
+```powershell
+./Client/build-release.ps1 -Flavor production -InnoCompiler 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+# Separate DEV installer, when needed:
+./Client/build-release.ps1 -Flavor development -InnoCompiler 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+```
+
+Omit `-InnoCompiler` to create the packaged application without an installer. Defaults expect Qt at `C:/Qt/6.10.1/mingw_64` and MinGW at `C:/Qt/Tools/mingw1310_64`; pass `-QtRoot` and `-CompilerRoot` for other locations. The release script also accepts `-NinjaPath`.
+
+Each release goes into a new directory under `Client/releases/` with a manifest of source state and hashes. Publishing is separate: copy the verified production installer to `Landing/Online_Proctoring_System_Setup.exe`, or the DEV installer to `Landing.dev/ExamGuardian_Dev_Setup.exe`. Do not assume a pre-existing portal binary matches your sources.
+
+The login screen accepts the server origin. `EXAMGUARDIAN_URL` overrides it. Use the application origin (HTTPS in production), without `/login`, `/api`, or `/landing/`.
+
+## Operations
+
+### Stop without deleting data
+
+```powershell
+./run.ps1 --stop
+./run.ps1 --production --stop
+```
+
+Each command stops only its selected environment and preserves volumes. Start it again with the matching launch command. Development and production can coexist when their configured host ports do not conflict.
+
+### Inspect logs for the correct environment
+
+```powershell
+docker compose --project-name examguardian-dev --env-file .env.dev -f compose.base.yml -f compose.dev.yml logs --tail 100 api ai_service nginx
+
+docker compose --project-name examguardian-production --env-file .env.production -f compose.base.yml -f compose.production.yml logs --tail 100 api ai_service nginx
+```
+
+Run these commands from the repository root. For dev frontend or documentation problems, use the same dev prefix with `logs --tail 100 monitor docs`. Review logs for secrets or participant data before sharing them.
+
+### Existing data and backups
+
+Restarting preserves data; deleting volumes does not. Before an upgrade, preserve a checkpoint of PostgreSQL, media, images, and AI SQLite state. See [deployment and persistence](/docs/09-deployment-view).
+
+The current `scripts/Backup.ps1` invokes bare `docker compose` and defaults to the legacy database identifiers. It is **not a profile-aware backup command** for the new dev/production projects. Do not assume running it unchanged protects these environments. Backup and restore procedures must explicitly target the selected project and verify the restored data before switching deployments.
+
+## Troubleshooting
+
+| Symptom | Check / next step |
+|---|---|
+| Unknown YAML tag in Compose | Update Docker Compose to a version supporting both overlay tags, then rerun `--check`. |
+| Port already allocated | Check the selected env file and other listeners. Change the intended port, then relaunch. `DOCS_PORT` is only auto-selected when the dev env file is first created. |
+| Production check fails | Replace placeholders; check the real HTTPS origin and both certificate paths. There is no fallback to dev. |
+| AI never becomes ready | Inspect `ai_service` logs for model downloads, initialization, or capacity/resource errors. Resolve the cause and rerun the selected launch command. |
+| Client says AI is unavailable/outdated | Confirm matching server origin and stack readiness; inspect AI logs and rebuild the selected stack if its code is stale. |
+| Panel login fails | Confirm the environment and its initial credentials. Accounts are separate across projects; bootstrap values do not reset existing users. |
+| No exams available | Create a student, assign the correct group, and check the exam schedule and attempt limit. No demo exam is seeded by default. |
+| Installer download fails or is old | Publish the verified installer to the matching production/DEV path above. Server startup does not package the client. |
+| Docs work but panel does not | Use the application port for `/login`; inspect the full stack, not just `docs`. |
+
+**Next:** [Run your first exam](/guide) · [Understand service responsibilities](/dev)

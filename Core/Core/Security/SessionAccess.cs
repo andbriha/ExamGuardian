@@ -32,9 +32,9 @@ public sealed class SessionAccess(AppDbContext db, AttemptTokens tokens)
     public async Task<List<int>> AvailableExamsAsync(ClaimsPrincipal user) {
         var id = UserId(user);
         var group = await db.Users.Where(u => u.Id == id).Select(u => u.Group).FirstOrDefaultAsync();
+        // Catalog includes upcoming exams; StartAsync still enforces the admission window.
         var now = DateTime.UtcNow;
         return await db.Exams.Where(e => (e.AllowedGroup == null || e.AllowedGroup == "" || e.AllowedGroup == group)
-            && (e.ScheduledStartTime ?? e.CreatedAt) <= now
             && (e.ScheduledStartTime ?? e.CreatedAt).AddMinutes(e.DurationMinutes) > now
             && (e.Sessions.Any(s => s.StudentId == id && !s.IsFinished) || e.Sessions.Count(s => s.StudentId == id) < e.MaxAttempts))
             .Select(e => e.Id).ToListAsync();

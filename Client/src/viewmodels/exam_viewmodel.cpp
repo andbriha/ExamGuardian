@@ -60,15 +60,38 @@ bool ExamViewModel::configureServer(const QString &value) {
     emit userChanged(); return true;
 }
 void ExamViewModel::loadAvailableExams() {
+    if (m_catalogLoading || m_token.isEmpty()) return;
+    m_catalogLoading = true;
+    emit catalogLoadingChanged();
     QNetworkRequest req(QUrl(clientServerUrl() + "/api/Exams"));
-    req.setRawHeader("X-Session-Token", m_attemptToken.toUtf8());
     req.setRawHeader("Authorization", ("Bearer " + m_token).toUtf8());
     auto *reply = m_net.get(req);
     connect(reply, &QNetworkReply::finished, this, [this,reply]() {
-        if (reply->error() == QNetworkReply::NoError) {
-            m_availableExams = QJsonDocument::fromJson(reply->readAll()).array().toVariantList();
-            emit availableExamsChanged();
-        } else emit examLoadFailed(reply->errorString());
+        m_catalogLoading = false;
+        emit catalogLoadingChanged();
+        QJsonParseError error;
+        const auto document = QJsonDocument::fromJson(reply->readAll(), &error);
+        if (reply->error() == QNetworkReply::NoError && error.error == QJsonParseError::NoError && document.isArray()) {
+            auto exams = document.array().toVariantList();
+            if (!exams.isEmpty()) {
+                const auto serverTime = QDateTime::fromString(exams.first().toMap()["serverTimeUtc"].toString(), Qt::ISODateWithMs);
+                if (serverTime.isValid()) { m_catalogServerTime = serverTime.toMSecsSinceEpoch(); m_catalogClock.start(); }
+            }
+            // Server time changes on every poll; do not rebuild unchanged cards or lose keyboard focus.
+            for (auto &value : exams) {
+                auto exam = value.toMap();
+                exam.remove("serverTimeUtc");
+                value = exam;
+            }
+            if (m_availableExams != exams) {
+                m_availableExams = exams;
+                emit availableExamsChanged();
+                emit selectedExamChanged();
+            }
+            emit catalogLoaded();
+        } else {
+            emit catalogLoadFailed(QStringLiteral("Не вдалося оновити список. Перевірте з’єднання із сервером; повторна спроба відбудеться автоматично."));
+        }
         reply->deleteLater();
     });
 }

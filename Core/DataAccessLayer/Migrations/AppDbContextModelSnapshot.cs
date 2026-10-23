@@ -22,6 +22,13 @@ namespace DataAccessLayer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("DataAccessLayer.Entities.StudentGroup", b =>
+                {
+                    b.Property<string>("Name").HasMaxLength(100).HasColumnType("character varying(100)");
+                    b.HasKey("Name");
+                    b.ToTable("StudentGroups");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.Exam", b =>
                 {
                     b.Property<int>("Id")

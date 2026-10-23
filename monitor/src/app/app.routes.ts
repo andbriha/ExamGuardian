@@ -1,4 +1,5 @@
 import { examinerGuard } from './auth/examiner.guard';
+import { GroupsComponent } from './pages/users/groups/groups';
 import { Routes } from '@angular/router';
 
 // Users
@@ -24,6 +25,7 @@ export const routes: Routes = [
   { path: 'login', component: AuthComponent, title: 'Вхід | Online Proctoring System' },
   
   // Users
+  { path: 'groups', component: GroupsComponent, canActivate: [examinerGuard], title: 'Академічні групи | ExamGuardian' },
   { path: 'students', component: StudentsComponent, canActivate: [examinerGuard], title: 'База студентів | Online Proctoring System' },
 { path: 'add-student', component: AddStudentComponent, canActivate: [examinerGuard], title: 'Додати студента | Online Proctoring System' },
   { path: 'student/:id', component: StudentDetailComponent, canActivate: [examinerGuard], title: 'Профіль студента | Online Proctoring System' },

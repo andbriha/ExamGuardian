@@ -7,6 +7,12 @@ title: "11. Current implementation & validation"
 
 ExamGuardian supports a self-hosted examination and a reasoned examiner decision. The score measures answers. An automated observation does not establish cheating, and the integrity verdict is stored separately.
 
+## Groups and student schedule
+
+The examiner panel has a persistent group catalog, creation, and student assignment. Legacy group names remain selectable. Student and exam forms share the server catalog. Moving a student with an unfinished attempt is rejected.
+
+The native exam catalog includes upcoming exams for the student’s group and currently open exams with attempts remaining. It refreshes every five seconds while visible, shows start/end times in the device timezone, and uses server time for availability. Future exams expose metadata, not questions; Core still rejects early starts. Unchanged cards retain focus across polling.
+
 ## Attempt contract
 
 The student chooses an assigned exam, passes a bound and expiring identity/pose challenge, and obtains a signed admission. Core controls the deadline, attempt limit and frozen exam definition. Resume keeps the original deadline and restores saved answers. A dedicated attempt token protects answers, submission and analysis; it rotates after a verified resume. Evidence delivery has a separate seven-day capability to support recovery.
@@ -29,7 +35,7 @@ Models share a bounded analysis slot, reject oversized inputs and signal capacit
 
 ## Operations
 
-The normal topology is one Nginx origin. Qt sends media to AI through Nginx; AI validates attempts and sends durable events to Core. Core stores attempts in PostgreSQL. The AI port is loopback only. A TLS overlay is available for a configured host certificate. Random bootstrap configuration replaces published default credentials in fresh installations.
+The normal topology is one Nginx origin. Qt sends media to AI through Nginx; AI validates attempts and sends durable events to Core. Core stores attempts in PostgreSQL. In the dev/production profiles, AI and PostgreSQL are internal services without published direct ports. Production uses the HTTPS overlay with a configured host certificate; the legacy stack has different port mappings. See [launch instructions](/start). Random bootstrap configuration replaces published default credentials in fresh installations.
 
 Database migrations are tracked. Backup includes database, media and online SQLite snapshots; restore uses a new isolated target. Retention is disabled until an administrator chooses a period and previews an explicit maintenance plan. It expires media for old finished/reviewed attempts while preserving answers, scores and review history.
 

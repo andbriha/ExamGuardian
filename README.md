@@ -14,6 +14,10 @@ This is a pilot implementation. Model accuracy, resistance to recorded-video att
 
 An observation is a reason to inspect context, not a calibrated probability of cheating. The system does not implement SignalR/WebSocket video, automatic integrity scoring, micro-earpiece recognition, speaker attribution, immutable PDF signing or LMS/CSV export. The printable report uses the browser print dialog.
 
+## Documentation
+
+The documentation site separates system overview (`/`), launch instructions (`/start`), examiner workflow (`/guide`), architecture (`/dev`), and a reference map (`/docs`). Start development below to serve it locally. Source: [web-site/README.md](web-site/README.md).
+
 ## Development and production
 
 ```powershell
@@ -25,7 +29,7 @@ An observation is a reason to inspect context, not a calibrated probability of c
 ./scripts/Start-Client.ps1
 ```
 
-Development initializes `.env.dev` with independent random secrets; examiner credentials are stored there. The application defaults to `http://127.0.0.1:8081`. The docs port is selected on first initialization (4323 on this workstation) and printed at launch. Copy `.env.production.example` to `.env.production` and replace all placeholders before selecting production. The production alias `--продакшн` is supported. Production failures never launch development instead.
+Development initializes `.env.dev` with independent random secrets; examiner credentials are stored there. The application defaults to `http://127.0.0.1:8081`. The docs port is selected on first initialization (starting at 4321) and printed at launch. Copy `.env.production.example` to `.env.production` and replace all placeholders before selecting production. The production alias `--продакшн` is supported. Production failures never launch development instead.
 
 The native DEV client opens local controls at startup (`Ctrl+Shift+D` reopens them). Switches disable VM/process/display/virtual-device checks, keyboard restrictions or focus restrictions. Identity verification, recording, AI, API, panel and examination data use the same code as production. No sample data is seeded. The landing is shared; only the served installer differs. Production compilation removes the local controls; `Client/build-release.ps1` defaults to production. Use `-Flavor development` for the DEV installer.
 
@@ -81,7 +85,9 @@ The final evidence manifest distinguishes Delivered, Partial, Pending and Unknow
 
 ## Backup, restore and retention
 
-Use a quiet checkpoint after active attempts and pending deliveries drain:
+The following scripts use the **legacy default Compose project**. They do not select the new dev/production profiles automatically; do not assume they protect those environments unchanged. A profile-aware procedure must explicitly select the project, configuration, and database identifiers.
+
+For the legacy installation, use a quiet checkpoint after active attempts and pending deliveries drain:
 
 ```powershell
 ./scripts/Backup.ps1 -Destination ./backups/checkpoint-01

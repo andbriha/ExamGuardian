@@ -246,7 +246,38 @@ class CoreContracts(unittest.TestCase):
             self.assertEqual(status,201,exam)
             self.assertEqual(self.start(examId=exam["id"],admissionToken=self.admission(exam_id=exam["id"]))[0],409)
             _, available=request("/api/Exams",token=self.students[0][1])
-            self.assertNotIn(exam["id"],[e["id"] for e in available])
+            if "allowedGroup" in settings:
+                self.assertNotIn(exam["id"], [e["id"] for e in available])
+            else:
+                upcoming = next(e for e in available if e["id"] == exam["id"])
+                self.assertEqual(upcoming["questions"], [])
+                self.assertTrue(upcoming["scheduledStartTime"])
+                self.assertTrue(upcoming["serverTimeUtc"])
+                self.assertEqual(request(f"/api/Exams/{exam['id']}", token=self.students[0][1])[0], 404)
+
+    def test_groups_creation_assignment_and_access(self):
+        name = "GROUP-" + uuid4().hex
+        self.assertEqual(request('/api/groups', 'POST', {'name': '  ' + name + '  '}, self.teacher)[0], 201)
+        self.assertIn(name, request('/api/groups', token=self.teacher)[1])
+        self.assertEqual(request('/api/groups', 'POST', {'name': name.lower()}, self.teacher)[0], 409)
+        for invalid in ['', ' ' * 3, 'x' * 101]:
+            self.assertEqual(request('/api/groups', 'POST', {'name': invalid}, self.teacher)[0], 400)
+        student_id, token, *_ = self.students[0]
+        self.assertEqual(request('/api/groups', token=token)[0], 403)
+        self.assertEqual(request('/api/groups', 'POST', {'name': name+'other'}, token)[0], 403)
+        self.assertEqual(request(f'/api/groups/students/{student_id}', 'PUT', {'name': name}, token)[0], 403)
+        self.assertEqual(request(f'/api/groups/students/{student_id}', 'PUT', {'name': 'missing-'+name}, self.teacher)[0], 400)
+        self.assertEqual(request(f'/api/groups/students/{student_id}', 'PUT', {'name': name}, self.teacher)[0], 204)
+        self.assertEqual(request(f'/api/Students/{student_id}', token=self.teacher)[1]['group'], name)
+        body = {'title':'Assigned future exam','allowedGroup':name,'durationMinutes':60,
+                'scheduledStartTime':(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=1)).isoformat(),
+                'questions':[{'text':'Q','points':1,'correctIndex':0,'options':['A','B']}]}
+        status, exam = request('/api/Exams','POST',body,self.teacher)
+        self.assertEqual(status,201,exam)
+        self.assertIn(exam['id'], [e['id'] for e in request('/api/Exams', token=token)[1]])
+        self.assertNotIn(exam['id'], [e['id'] for e in request('/api/Exams', token=self.students[1][1])[1]])
+        self.assertEqual(self.start()[0],200)
+        self.assertEqual(request(f'/api/groups/students/{student_id}', 'PUT', {'name':'TEST'}, self.teacher)[0],409)
 
     def test_integrity_is_distinct_from_academic_score(self):
         _,session=self.start(); sid=session["id"]; token=self.students[0][1]

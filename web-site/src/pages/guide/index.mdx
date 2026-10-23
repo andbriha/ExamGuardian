@@ -1,0 +1,75 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "Run an exam"
+---
+
+# Run an exam
+
+For examiners and organizers. This guide follows one exam from participant preparation to a reviewed result. If the server is not running yet, complete [Launch: dev & production](/start) first.
+
+**On this page:** [Prepare](#1-prepare-participants) · [Configure](#2-configure-the-exam) · [Student admission](#3-prepare-the-student-and-start) · [Monitor](#4-monitor-the-attempt) · [Review](#5-review-and-record-the-outcome)
+
+## 1. Prepare participants
+
+1. Open `/login` on the **application origin**, and sign in as an examiner.
+2. Open **Academic groups**, create a group, then create student accounts and select that group. The group page also lets you move existing students; an active attempt blocks a group change.
+3. Enroll a JPEG reference photograph for each student. Identity checks compare the student against this enrolled reference.
+4. Provide students with their credentials, the correct server origin, and the matching client installer from `/landing/` on that origin.
+
+**Ready to continue:** the student exists in the intended environment, has a reference photograph, and belongs to the group that will receive the exam. Development and production have separate accounts.
+
+## 2. Configure the exam
+
+Create an exam with its subject, group, questions, and answer options. Set:
+
+| Setting | Why it matters |
+|---|---|
+| Scheduled start | Determines when the assigned exam is available; check the displayed timezone. |
+| Duration | Core enforces the attempt deadline. Reopening a client does not reset it. |
+| Attempt limit | Limits how many attempts the participant can start. |
+| Passing score | Determines the academic outcome from answers. |
+| Speech, objects, and head-movement policy | Determines which observations are relevant to this exam. |
+
+The attempt captures the exam definition and policy at start. Do not expect later edits to rewrite an already running attempt.
+
+**Ready to continue:** the student can see the assigned exam at the intended time, and the policy matches the instructions given to participants.
+
+## 3. Prepare the student and start
+
+1. Launch the native client and select the application origin. Use HTTPS for production.
+2. Sign in, review the recording/privacy information, and prepare the camera and microphone.
+3. Close prohibited applications and resolve environment checks. A DEV override is a local development tool, not a production admission procedure.
+4. The client lists upcoming and currently available exams and refreshes every five seconds. Check the displayed start/end time (in the device timezone), select an available exam, and complete the identity and timed pose challenge. Upcoming exams are visible but cannot be started early.
+5. Begin the attempt after admission. Core controls the deadline; the client saves answers and records camera/screen evidence.
+
+**If interrupted:** reopen the client with the same account and origin. A verified resume restores saved answers while retaining the original deadline. Pending evidence can continue uploading under its separate, time-limited delivery authorization (seven days).
+
+## 4. Monitor the attempt
+
+Use the examiner panel to inspect attempt state, connection status, previews, and observations. The panel uses REST polling; it is not a live WebSocket video feed. Camera analysis, audio analysis, and recording delivery are separate statuses.
+
+AI analyzes submitted frames and audio samples. An observation is a prompt to inspect context, not an automatic integrity verdict. Speech activity does not identify a speaker, and objects outside the camera image cannot be detected.
+
+After submission or expiry, inspect the evidence manifest and available camera/screen recordings. A submitted exam can still have pending evidence deliveries.
+
+## 5. Review and record the outcome
+
+Keep the three outcomes separate:
+
+| Outcome | What to inspect |
+|---|---|
+| Academic score | Saved answers and calculated score |
+| Evidence delivery | Delivered, Partial, Pending, or Unknown coverage; gaps in camera/screen recordings |
+| Integrity verdict | Examiner decision based on observations and available evidence |
+
+Confirm or dismiss observations after reviewing context. The review rules require:
+
+- **Accepted:** complete delivered evidence and dismissed observations.
+- **Rejected:** a confirmed observation.
+- **Inconclusive:** insufficient evidence to reach a supported conclusion.
+
+Delivered describes file/time coverage; it does not guarantee a useful camera image. Late recordings or observations can return an attempt to review without changing its academic score.
+
+Print the report through the browser when needed. The current report is printable HTML, not an immutable signed PDF or LMS export.
+
+**Complete when:** the academic result, evidence state, and examiner verdict are understood and recorded. For exact behavior and testing boundaries, see [Current behavior & validation](/docs/11-current-contract).

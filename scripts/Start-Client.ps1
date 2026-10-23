@@ -21,4 +21,4 @@ if ($LASTEXITCODE -ne 0) {throw 'Client configuration failed.'}
 cmake --build $build --parallel 4
 if ($LASTEXITCODE -ne 0) {throw 'Client build failed.'}
 Write-Host "Starting $flavor client against $env:EXAMGUARDIAN_URL"
-Start-Process -FilePath (Join-Path $build 'appClient.exe') -WindowStyle Hidden
+Start-Process -FilePath (Join-Path $build 'appClient.exe') -WindowStyle Normal

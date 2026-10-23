@@ -5,6 +5,7 @@ namespace DataAccessLayer.Data
 {
     public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
     {
+        public DbSet<StudentGroup> StudentGroups => Set<StudentGroup>();
         public DbSet<User> Users => Set<User>();
         public DbSet<Exam> Exams => Set<Exam>();
         public DbSet<ExamSession> Sessions => Set<ExamSession>();
@@ -14,6 +15,8 @@ namespace DataAccessLayer.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            modelBuilder.Entity<StudentGroup>().HasKey(g => g.Name);
+            modelBuilder.Entity<StudentGroup>().Property(g => g.Name).HasMaxLength(100);
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         }
     }

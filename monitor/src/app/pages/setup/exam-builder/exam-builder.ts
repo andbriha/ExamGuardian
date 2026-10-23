@@ -1,7 +1,9 @@
 // exam-builder.component.ts
-import { Component, ChangeDetectorRef } from '@angular/core';
+import { Component, ChangeDetectorRef, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { GroupService } from '../../../services/group.service';
+import { RouterLink } from '@angular/router';
 import { ExamService } from '../../../services/exam.service';
 
 interface QuestionOption {
@@ -33,11 +35,14 @@ interface CreateExamDto {
 @Component({
   selector: 'app-exam-builder',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './exam-builder.html',
   styleUrl: './exam-builder.css',
 })
-export class ExamBuilderComponent {
+export class ExamBuilderComponent implements OnInit {
+  groups: string[] = [];
+  groupsError = false;
+  ngOnInit() { this.groupService.getAll().subscribe({next: groups => { this.groups = groups; this.cdr.markForCheck(); }, error: () => { this.groupsError = true; this.cdr.markForCheck(); }}); }
   exam = {
     title: '',
     description: '',
@@ -52,7 +57,7 @@ export class ExamBuilderComponent {
   errorMsg = '';
   successMsg = '';
 
-  constructor(private examService: ExamService, private cdr: ChangeDetectorRef) {
+  constructor(private groupService: GroupService, private examService: ExamService, private cdr: ChangeDetectorRef) {
     this.addQuestion(); // починаємо з одного питання
   }
 
