@@ -1,46 +1,35 @@
-# Astro Starter Kit: Basics
+# ExamGuardian documentation site
 
-```sh
-npm create astro@latest -- --template basics
+Astro/MDX documentation for the actual system, with task-oriented entry points:
+
+- `/`: purpose, attempt lifecycle, and routes into the documentation.
+- `/start`: dev/production setup, native client, operations, and troubleshooting.
+- `/guide`: examiner workflow from participant setup to review.
+- `/dev`: service responsibilities and data flow.
+- `/docs`: documentation map, component reference, and validation boundaries.
+
+## Work locally
+
+The repository launcher `./run.ps1` starts documentation as part of the dev environment. Use the printed docs URL; the port is saved in `.env.dev`. Source edits reload automatically.
+
+For documentation-only work, use Node satisfying `package.json` (the Docker image uses Node 24). From this directory:
+
+```powershell
+npm.cmd ci
+npm.cmd run dev -- --background
+npm.cmd run astro -- dev status
+npm.cmd run astro -- dev stop
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Validate
 
-## 🚀 Project Structure
-
-Inside of your Astro project, you'll see the following folders and files:
-
-```text
-/
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
+```powershell
+npm.cmd run build
+npm.cmd run check:diagrams
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+The static output is `dist/`. Check new routes, internal links/anchors, and narrow-screen layout before publishing. Production application startup does not serve this documentation site.
 
-## 🧞 Commands
+Navigation groups live in `src/data/navigation.ts`; both the documentation map and sidebar use them. Use `DocsLayout.astro` for reference and task pages, and `Layout.astro` for the overview. Preserve public routes when moving content.
 
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+Confirm operational commands against `run.ps1`, `scripts/Start-Environment.ps1`, and the Compose overlays. Keep current behavior separate from planned features and recorded validation. Do not document fixed local ports or secrets from a workstation's environment files.

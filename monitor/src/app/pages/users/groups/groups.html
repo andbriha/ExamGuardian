@@ -1,0 +1,28 @@
+<div class="groups-page">
+  <h2>Академічні групи</h2>
+  <p class="intro">Створіть групу, додайте студентів та оберіть її під час планування іспиту.</p>
+  <p class="error" role="alert" *ngIf="error">{{ error }} <button type="button" (click)="load()" [disabled]="loading">Оновити</button></p>
+  <p class="success" role="status" *ngIf="success">{{ success }}</p>
+  <form class="create-group" (ngSubmit)="create()">
+    <div><label for="group-name">Назва нової групи</label><input id="group-name" name="name" [(ngModel)]="name" required maxlength="100" placeholder="Наприклад, КН-2026"></div>
+    <button class="primary" [disabled]="saving || loading || !name.trim()">{{ saving ? 'Збереження…' : 'Створити групу' }}</button>
+  </form>
+  <p *ngIf="loading" role="status">Завантаження груп…</p>
+  <p *ngIf="!loading && !groups.length && !error" class="empty">Груп ще немає. Створіть першу групу вище.</p>
+  <div class="group-layout" *ngIf="!loading && groups.length">
+    <nav aria-label="Академічні групи">
+      <button type="button" *ngFor="let group of groups" [class.selected]="selected === group" [attr.aria-pressed]="selected === group" (click)="select(group)" [disabled]="assigning">{{ group }} <span>{{ count(group) }}</span></button>
+    </nav>
+    <section class="members">
+      <h3>{{ selected }}</h3><p>Студентів: {{ members.length }} · <a routerLink="/add-student">Створити акаунт студента</a></p>
+      <form (ngSubmit)="assign()" class="assign-form">
+        <label for="group-student">Додати або перевести студента до цієї групи</label>
+        <select id="group-student" name="studentId" [(ngModel)]="studentId" [disabled]="assigning"><option value="">Оберіть студента</option><option *ngFor="let student of candidates" [value]="student.id">{{ student.fullName }} · {{ student.group || 'Без групи' }}</option></select>
+        <small>Студент належить до однієї групи. Зміна групи змінить список призначених йому іспитів.</small>
+        <button class="primary" [disabled]="assigning || !studentId">{{ assigning ? 'Збереження…' : 'Зберегти групу студента' }}</button>
+      </form>
+      <p *ngIf="!members.length" class="empty">У цій групі ще немає студентів.</p>
+      <ul><li *ngFor="let student of members"><a [routerLink]="['/student', student.id]">{{ student.fullName }}</a><span>{{ student.login }}</span></li></ul>
+    </section>
+  </div>
+</div>

@@ -3,6 +3,9 @@
 Set EXAMGUARDIAN_TEST_URL and EXAMGUARDIAN_TEST_KEY explicitly. Never use a
 working deployment: these tests create their own students, exams and evidence.
 """
+import csv
+import io
+import zipfile
 import datetime
 import base64
 import concurrent.futures
@@ -91,6 +94,89 @@ class CoreContracts(unittest.TestCase):
             CAPABILITIES[self.students[student][1]] = {"X-Session-Token": result["attemptToken"], "X-Evidence-Token": result["evidenceToken"]}
         return status, result
 
+    def test_qti_preview_validates_package_and_does_not_create_exam(self):
+        xml = (Path(__file__).parent / 'fixtures/qti-single-choice.xml').read_bytes()
+        def upload(content, name='item.xml', token=None):
+            boundary = 'qti-test'
+            body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\nContent-Type: application/octet-stream\r\n\r\n').encode() + content + f'\r\n--{boundary}--\r\n'.encode()
+            return request('/api/exams/import-qti', 'POST', body, token or self.teacher, f'multipart/form-data; boundary={boundary}')
+        _, before = request('/api/Exams', token=self.teacher)
+        status, preview = upload(xml)
+        self.assertEqual(status, 200, preview); self.assertTrue(preview['canImport'])
+        self.assertEqual(preview['questions'][0]['correctIndex'], 1)
+        self.assertEqual(preview['questions'][0]['text'], 'Which number is even?')
+        self.assertEqual(preview['questions'][0]['options'], ['3', '4'])
+        _, after = request('/api/Exams', token=self.teacher)
+        self.assertEqual(len(before), len(after))
+        self.assertEqual(upload(xml, token=self.students[0][1])[0], 403)
+        for invalid in [xml.replace(b'maxChoices="1"', b'maxChoices="2"'), xml.replace(b'match_correct', b'map_response'), xml.replace(b'<value>B</value>', b'<value>X</value>'), xml.replace(b'<p>', b'<p><img src="image.png"/>')]:
+            status, result = upload(invalid)
+            self.assertEqual(status, 200, result); self.assertFalse(result['canImport']); self.assertTrue(result['issues'])
+        self.assertEqual(upload(b'<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><x>&e;</x>')[0], 400)
+        manifest = b'<manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1"><resources><resource identifier="item" type="imsqti_item_xmlv2p1" href="items/item.xml"/></resources></manifest>'
+        def package(extra=False):
+            stream = io.BytesIO()
+            with zipfile.ZipFile(stream, 'w') as archive:
+                archive.writestr('imsmanifest.xml', manifest)
+                archive.writestr('items/item.xml', xml)
+                if extra: archive.writestr('../outside.xml', xml)
+            return stream.getvalue()
+        status, preview = upload(package(), 'items.zip')
+        self.assertEqual(status, 200, preview); self.assertTrue(preview['canImport'])
+        self.assertEqual(upload(package(True), 'items.zip')[0], 400)
+        self.assertEqual(upload(b'not a zip', 'items.zip')[0], 400)
+
+    def test_qti_true_false_scores_through_normal_exam_flow(self):
+        xml = (Path(__file__).parent / 'fixtures/qti-true-false.xml').read_bytes()
+        boundary = 'qti-boolean'
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="boolean.xml"\r\n\r\n').encode() + xml + f'\r\n--{boundary}--\r\n'.encode()
+        status, preview = request('/api/exams/import-qti', 'POST', body, self.teacher, f'multipart/form-data; boundary={boundary}')
+        self.assertEqual(status,200,preview); self.assertTrue(preview['canImport'])
+        status, self.exam = request('/api/Exams','POST',{'title':'True / false contract','durationMinutes':60,'questions':preview['questions']},self.teacher)
+        self.assertEqual(status,201,self.exam)
+        _, session = self.start(); question = self.exam['questions'][0]['id']
+        status, result = request(f"/api/Exams/{self.exam['id']}/submit",'POST',{'sessionId':session['id'],'answers':{question:0}},self.students[0][1])
+        self.assertEqual(status,200,result); self.assertEqual(result['score'],100)
+
+    def test_grade_export_latest_attempt_and_teacher_scope(self):
+        _, session = self.start(); sid = session['id']; token = self.students[0][1]
+        self.assertEqual(request(f"/api/Exams/{self.exam['id']}/submit", 'POST', {'sessionId':sid,'answers':{}}, token)[0], 200)
+        def sql(query):
+            subprocess.run(['docker','exec',os.environ['EXAMGUARDIAN_TEST_DB_CONTAINER'],'psql','-U','tester','-d','examguardian_test','-c',query], check=True, capture_output=True)
+        # Isolated fixture state for export selection; the real evidence/review flow is covered separately.
+        sql(f"""UPDATE "Sessions" SET "IntegrityVerdict"='Accepted', "EvidenceStatus"='Delivered' WHERE "Id"={sid}; UPDATE "Exams" SET "MaxAttempts"=2 WHERE "Id"={self.exam['id']};""")
+        export = f"/api/Exams/{self.exam['id']}/grades?group=TEST"
+        status, data = request(export, token=self.teacher)
+        self.assertEqual(status, 200, data)
+        status, catalog = request('/api/grade-exports', token=self.teacher)
+        self.assertEqual(status, 200, catalog)
+        exported = [exam for group in catalog if group['group'] == 'TEST' for exam in group['exams'] if exam['examId'] == self.exam['id']]
+        self.assertEqual(len(exported), 1); self.assertEqual(exported[0]['eligibleCount'], 1)
+        self.assertEqual(request('/api/grade-exports', token=token)[0], 403)
+        self.assertEqual(request(f"/api/Exams/{self.exam['id']}/grades", token=self.teacher)[0], 400)
+        self.assertEqual(request(f"/api/Exams/{self.exam['id']}/grades?group=OTHER", token=self.teacher)[0], 409)
+        _, other_session = self.start(student=1)
+        self.assertEqual(request(f"/api/Exams/{self.exam['id']}/submit",'POST',{'sessionId':other_session['id'],'answers':{}},self.students[1][1])[0],200)
+        sql(f"""UPDATE "Sessions" SET "IntegrityVerdict"='Accepted', "EvidenceStatus"='Delivered' WHERE "Id"={other_session['id']}; UPDATE "Users" SET "Group"='OTHER' WHERE "Id"='{self.students[1][0]}';""")
+        _, original_csv = request(export, token=self.teacher)
+        self.assertEqual([r['username'] for r in csv.DictReader(io.StringIO(original_csv.decode()))], [self.students[0][2]])
+        _, other_csv = request(f"/api/Exams/{self.exam['id']}/grades?group=OTHER", token=self.teacher)
+        self.assertEqual([r['username'] for r in csv.DictReader(io.StringIO(other_csv.decode()))], [self.students[1][2]])
+        sql(f"""UPDATE "Users" SET "Group"=NULL WHERE "Id"='{self.students[1][0]}';""")
+        self.assertEqual(request(f"/api/Exams/{self.exam['id']}/grades?group=", token=self.teacher)[0],200)
+
+        other_teacher = jwt_token({'id':str(uuid4()), 'role':'Examiner','iss':'ExamGuardianTest','aud':'ExamGuardianTestClient','exp':int(time.time())+120})
+        self.assertEqual(request(export, token=other_teacher)[0], 404)
+        sql(f"""UPDATE "Sessions" SET "EvidenceStatus"='Expired' WHERE "Id"={sid};""")
+        self.assertEqual(request(export, token=self.teacher)[0], 200)
+
+        status, latest = self.start()
+        self.assertEqual(status, 200, latest); self.assertNotEqual(latest['id'], sid)
+        self.assertEqual(request(export, token=self.teacher)[0], 409)
+        _, catalog = request('/api/grade-exports', token=self.teacher)
+        self.assertFalse(any(exam['examId'] == self.exam['id'] for group in catalog if group['group'] == 'TEST' for exam in group['exams']))
+
+    @unittest.skipIf(os.environ.get("EXAMGUARDIAN_TEST_DEVELOPMENT") == "true", "Production artifact contract")
     def test_production_artifact_has_no_development_admission(self):
         token=self.students[0][1]
         status,caps=request('/api/system/capabilities',token=token)
@@ -99,6 +185,32 @@ class CoreContracts(unittest.TestCase):
         self.assertEqual(request('/api/development/admissions','POST',{'examId':self.exam['id'],'overrides':['vmGate']},token)[0],404)
         admission=jwt_token({'sub':self.students[0][0],'exam_id':str(self.exam['id']),'purpose':'development-admission','jti':uuid4().hex,'overrides':'["vmGate"]','iss':'ExamGuardianTest','aud':'ExamGuardianDevelopmentAdmission','exp':int(time.time())+120})
         self.assertEqual(self.start(admissionToken=admission)[0],400)
+
+    @unittest.skipUnless(os.environ.get("EXAMGUARDIAN_TEST_DEVELOPMENT") == "true", "DEV artifact contract")
+    def test_development_identity_bypass_is_scoped_and_not_exportable(self):
+        token = self.students[0][1]
+        _, caps = request('/api/system/capabilities',token=token)
+        self.assertTrue(caps['developmentToolsAvailable']); self.assertEqual(caps['allowedOverrides'], ['biometricAdmission'])
+        body = {'examId':self.exam['id'],'overrides':['biometricAdmission']}
+        path = '/api/development/admissions'
+        self.assertEqual(request(path,'POST',body)[0],401)
+        self.assertEqual(request(path,'POST',body,self.teacher)[0],403)
+        self.assertEqual(request(path,'POST',dict(body,overrides=['vmGate']),token)[0],400)
+        status, admission = request(path,'POST',body,token)
+        self.assertEqual(status,200,admission)
+        self.assertEqual(self.start(student=1,admissionToken=admission['admissionToken'])[0],400)
+        status, session = self.start(admissionToken=admission['admissionToken'])
+        self.assertEqual(status,200,session); self.assertTrue(session['identityVerificationSkipped'])
+        # Normal verification on resume must not erase the DEV marker.
+        status, resumed = self.start()
+        self.assertEqual(status,200,resumed); self.assertTrue(resumed['identityVerificationSkipped'])
+        sid = session['id']
+        self.assertEqual(request(f"/api/Exams/{self.exam['id']}/submit",'POST',{'sessionId':sid,'answers':{}},token)[0],200)
+        status, error = request(f'/api/ExamSessions/{sid}/review','POST',{'verdict':'Accepted','notes':'test'},self.teacher)
+        self.assertEqual(status,409,error); self.assertIn('identity',error['message'])
+        self.assertEqual(request(f"/api/Exams/{self.exam['id']}/grades?group=TEST",token=self.teacher)[0],409)
+        _, catalog = request('/api/grade-exports',token=self.teacher)
+        self.assertTrue(any(reason['code']=='identitySkipped' for group in catalog for reason in group['exclusions']))
 
     def test_client_cannot_set_test_markers_on_normal_admission(self):
         status,session=self.start(isTest=True,testPolicyJson='["vmGate"]')
@@ -246,7 +358,38 @@ class CoreContracts(unittest.TestCase):
             self.assertEqual(status,201,exam)
             self.assertEqual(self.start(examId=exam["id"],admissionToken=self.admission(exam_id=exam["id"]))[0],409)
             _, available=request("/api/Exams",token=self.students[0][1])
-            self.assertNotIn(exam["id"],[e["id"] for e in available])
+            if "allowedGroup" in settings:
+                self.assertNotIn(exam["id"], [e["id"] for e in available])
+            else:
+                upcoming = next(e for e in available if e["id"] == exam["id"])
+                self.assertEqual(upcoming["questions"], [])
+                self.assertTrue(upcoming["scheduledStartTime"])
+                self.assertTrue(upcoming["serverTimeUtc"])
+                self.assertEqual(request(f"/api/Exams/{exam['id']}", token=self.students[0][1])[0], 404)
+
+    def test_groups_creation_assignment_and_access(self):
+        name = "GROUP-" + uuid4().hex
+        self.assertEqual(request('/api/groups', 'POST', {'name': '  ' + name + '  '}, self.teacher)[0], 201)
+        self.assertIn(name, request('/api/groups', token=self.teacher)[1])
+        self.assertEqual(request('/api/groups', 'POST', {'name': name.lower()}, self.teacher)[0], 409)
+        for invalid in ['', ' ' * 3, 'x' * 101]:
+            self.assertEqual(request('/api/groups', 'POST', {'name': invalid}, self.teacher)[0], 400)
+        student_id, token, *_ = self.students[0]
+        self.assertEqual(request('/api/groups', token=token)[0], 403)
+        self.assertEqual(request('/api/groups', 'POST', {'name': name+'other'}, token)[0], 403)
+        self.assertEqual(request(f'/api/groups/students/{student_id}', 'PUT', {'name': name}, token)[0], 403)
+        self.assertEqual(request(f'/api/groups/students/{student_id}', 'PUT', {'name': 'missing-'+name}, self.teacher)[0], 400)
+        self.assertEqual(request(f'/api/groups/students/{student_id}', 'PUT', {'name': name}, self.teacher)[0], 204)
+        self.assertEqual(request(f'/api/Students/{student_id}', token=self.teacher)[1]['group'], name)
+        body = {'title':'Assigned future exam','allowedGroup':name,'durationMinutes':60,
+                'scheduledStartTime':(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=1)).isoformat(),
+                'questions':[{'text':'Q','points':1,'correctIndex':0,'options':['A','B']}]}
+        status, exam = request('/api/Exams','POST',body,self.teacher)
+        self.assertEqual(status,201,exam)
+        self.assertIn(exam['id'], [e['id'] for e in request('/api/Exams', token=token)[1]])
+        self.assertNotIn(exam['id'], [e['id'] for e in request('/api/Exams', token=self.students[1][1])[1]])
+        self.assertEqual(self.start()[0],200)
+        self.assertEqual(request(f'/api/groups/students/{student_id}', 'PUT', {'name':'TEST'}, self.teacher)[0],409)
 
     def test_integrity_is_distinct_from_academic_score(self):
         _,session=self.start(); sid=session["id"]; token=self.students[0][1]
@@ -289,6 +432,14 @@ class CoreContracts(unittest.TestCase):
         self.assertEqual(status,200,complete); self.assertEqual(complete["status"],"Delivered")
         status,review=request(f"/api/ExamSessions/{sid}/review","POST",{"verdict":"Accepted","notes":"Both recordings inspected"},self.teacher)
         self.assertEqual(status,200,review); self.assertEqual(review["integrityVerdict"],"Accepted")
+        export = f"/api/Exams/{self.exam['id']}/grades?group=TEST"
+        self.assertEqual(request(export)[0], 401)
+        self.assertEqual(request(export, token=token)[0], 403)
+        self.assertEqual(request(f"/api/Exams/{self.exam['id']+100000}/grades?group=TEST", token=self.teacher)[0], 404)
+        status, data = request(export, token=self.teacher)
+        self.assertEqual(status, 200, data)
+        self.assertEqual(list(csv.DictReader(io.StringIO(data.decode('utf-8')))), [{'username': self.students[0][2], 'grade': '0'}])
+
         self.assertEqual(upload_video(sid,1,token)[0],200)
         _,unchanged=request(f"/api/ExamSessions/{sid}",token=self.teacher)
         self.assertEqual(unchanged["integrityVerdict"],"Accepted")
@@ -296,6 +447,7 @@ class CoreContracts(unittest.TestCase):
         _,changed=request(f"/api/ExamSessions/{sid}",token=self.teacher)
         self.assertEqual(changed["integrityVerdict"],"UnderReview")
         self.assertEqual(changed["evidenceStatus"],"Pending")
+        self.assertEqual(request(export, token=self.teacher)[0], 409)
         _,partial=request(path,"POST",{"camera":1,"screen":1},token)
         self.assertEqual(partial["status"],"Partial")
 

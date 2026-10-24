@@ -65,6 +65,13 @@ export interface CreateExamDto {
   }[];
 }
 
+export interface QtiPreview {
+  questions: { text: string; points: number; correctIndex: number; options: string[] }[];
+  issues: { file: string; message: string }[];
+  canImport: boolean;
+  notice: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -83,6 +90,11 @@ export class ExamService {
 
   create(dto: CreateExamDto): Observable<ExamDto> {
     return this.http.post<ExamDto>(this.apiUrl, dto);
+  }
+
+  importQti(file: File): Observable<QtiPreview> {
+    const body = new FormData(); body.append('file', file);
+    return this.http.post<QtiPreview>(`${this.apiUrl}/import-qti`, body);
   }
 
   delete(id: number): Observable<void> {

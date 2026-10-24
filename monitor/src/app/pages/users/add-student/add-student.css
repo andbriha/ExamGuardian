@@ -13,8 +13,8 @@
 .req { color: #ef4444; }
 .hint { display: block; font-size: 12px; color: #94a3b8; margin-top: 4px; }
 
-.input-group input { width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box; transition: 0.15s; }
-.input-group input:focus { border-color: #0d9e7e; box-shadow: 0 0 0 3px rgba(13,158,126,0.1); }
+.input-group input, .input-group select { width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; box-sizing: border-box; transition: 0.15s; }
+.input-group input:focus, .input-group select:focus { border-color: #0d9e7e; box-shadow: 0 0 0 3px rgba(13,158,126,0.1); }
 .code-font { font-family: monospace; font-size: 15px; }
 .font-bold { font-weight: 700; color: #0f172a; }
 

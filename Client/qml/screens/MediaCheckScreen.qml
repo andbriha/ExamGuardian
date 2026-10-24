@@ -54,7 +54,7 @@ Page {
             if (passed) {
                 step = 5 // Успіх
                 errorMessage = ""
-                progressHint = "✅ Верифікацію успішно пройдено! Переходимо до іспиту..."
+                progressHint = message + " Переходимо до іспиту..."
                 autoProceedTimer.start()
             } else {
                 progressHint = message

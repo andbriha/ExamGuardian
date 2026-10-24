@@ -32,3 +32,16 @@
 .btn-pdf { background: #fff; color: #0d9e7e; border: 1px solid #0d9e7e; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: center; }
 .btn-pdf:hover { background: #0d9e7e; color: #fff; }
 .badge-unknown { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+
+.workflow-panel { padding: 24px; margin: 24px 0; background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; }
+.workflow-panel label, .workflow-panel small { display: block; margin: 12px 0 6px; }
+.workflow-panel select, .workflow-panel textarea { box-sizing: border-box; width: 100%; max-width: 720px; padding: 10px; border: 1px solid #94a3b8; border-radius: 6px; font: inherit; }
+.workflow-panel button, .report-card button { margin: 8px 8px 8px 0; padding: 10px 14px; cursor: pointer; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+.workflow-panel details { margin-top: 12px; }
+
+.hub-wrap button { border: 1px solid #0f766e; border-radius: 6px; padding: 10px 14px; background: #f0fdfa; color: #115e59; font: inherit; font-weight: 600; }
+.hub-wrap button:enabled:hover { background: #ccfbf1; }
+.hub-wrap a { color: #0f766e; }
+.workflow-panel p, .workflow-panel li { line-height: 1.6; }
+.workflow-panel a { display: inline-block; margin-right: 12px; }

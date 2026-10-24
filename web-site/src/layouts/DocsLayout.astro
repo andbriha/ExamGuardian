@@ -1,79 +1,19 @@
 ---
 import '../styles/global.css'
 import Navigation from '../components/Navigation.astro'
-const { title } = Astro.props
-const pathname = Astro.url?.pathname ?? ''
-
-function linkClass(href: string): string {
-  const active = pathname === href || pathname.startsWith(href)
-  return active
-    ? 'block px-3 py-1.5 rounded-md bg-sky-100 text-sky-700 font-semibold text-sm'
-    : 'block px-3 py-1.5 rounded-md text-slate-600 hover:bg-slate-100 hover:text-sky-600 font-medium text-sm transition-colors'
-}
+import { sections } from '../data/navigation'
+const title = Astro.props.title ?? Astro.props.frontmatter?.title ?? 'Documentation'
+const pathname = Astro.url.pathname.replace(/\/$/, '')
 ---
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title} | ExamGuardian Docs</title>
-  </head>
-  <body class="bg-white text-slate-900 min-h-screen flex flex-col">
-    <Navigation />
-    
-    <div class="flex-1 max-w-7xl mx-auto w-full flex flex-col md:flex-row">
-      <aside class="w-full md:w-72 border-r border-slate-200 p-5 bg-slate-50 overflow-y-auto md:h-[calc(100vh-3.5rem)] md:sticky md:top-0">
-        <nav class="flex flex-col gap-5">
-          
-          <a href="/docs/11-current-contract" class={linkClass("/docs/11-current-contract")}>Current implementation &amp; validation</a>
-          <div class="flex flex-col gap-1">
-            <span class="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1">Level 1 — Context</span>
-            <a href="/docs/01-system-context" class={linkClass('/docs/01-system-context')}>System Context &amp; Threat Model</a>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <span class="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1">Level 2 — Containers</span>
-            <a href="/docs/02-container-view" class={linkClass('/docs/02-container-view')}>High-Level Architecture</a>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <span class="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1">Level 3 — Components</span>
-            <a href="/docs/03-qt-client" class={linkClass('/docs/03-qt-client')}>Qt Desktop Client</a>
-            <a href="/docs/04-core-api" class={linkClass('/docs/04-core-api')}>ASP.NET Core Gateway</a>
-            <a href="/docs/05-ai-engine" class={linkClass('/docs/05-ai-engine')}>FastAPI AI Engine</a>
-            <a href="/docs/06-angular-monitor" class={linkClass('/docs/06-angular-monitor')}>Angular Monitor Panel</a>
-            <a href="/docs/07-student-portal" class={linkClass('/docs/07-student-portal')}>Student Portal</a>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <span class="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1">Dynamics &amp; Flows</span>
-            <a href="/docs/08-runtime-view" class={linkClass('/docs/08-runtime-view')}>Runtime View (Sequences)</a>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <span class="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1">Infrastructure</span>
-            <a href="/docs/09-deployment-view" class={linkClass('/docs/09-deployment-view')}>Deployment &amp; Docker</a>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <span class="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1">Evolution &amp; Roadmap</span>
-            <a href="/docs/10-system-improvements" class={linkClass('/docs/10-system-improvements')}>Architecture &amp; UX Roadmap</a>
-          </div>
-
-          <div class="mt-2 pt-4 border-t border-slate-200 flex flex-col gap-1">
-            <span class="text-[11px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1">Quick Links</span>
-            <a href="/guide" class="block px-3 py-1.5 rounded-md text-slate-600 hover:bg-slate-100 text-sm transition-colors">📋 Organizer Guide</a>
-            <a href="/dev" class="block px-3 py-1.5 rounded-md text-slate-600 hover:bg-slate-100 text-sm transition-colors">🏛 Architecture Summary</a>
-            <a href="/landing/" class="block px-3 py-1.5 rounded-md text-emerald-700 hover:bg-emerald-50 text-sm font-medium transition-colors">🎓 Student Portal</a>
-          </div>
-
-        </nav>
-      </aside>
-      
-      <main class="docs-content flex-1 min-w-0 px-6 py-8 md:px-12 w-full max-w-4xl">
-          <slot />
-      </main>
-    </div>
-
-  </body>
-</html>
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{title} | ExamGuardian Docs</title></head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a><Navigation />
+<div class="documentation-shell">
+<aside class="documentation-sidebar"><details open><summary>Browse documentation</summary><nav aria-label="Documentation">
+{sections.map(section => <div class="sidebar-group"><p>{section.title}</p>{section.items.map(item => <a href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.title}</a>)}</div>)}
+</nav></details></aside>
+<main id="main" class="docs-content documentation-article"><slot /></main>
+</div>
+</body></html>

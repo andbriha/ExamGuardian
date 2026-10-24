@@ -55,6 +55,8 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
         }
         session.ActiveClientId = Guid.NewGuid().ToString("N");
         session.EvidenceClientId ??= Guid.NewGuid().ToString("N");
+        // Once bypassed, a resumed attempt remains marked even after a normal verification.
+        if (dto.AdmissionId?.StartsWith("dev_") == true) session.AdmissionId = dto.AdmissionId;
         session.AdmissionId ??= dto.AdmissionId;
         if(session.DeadlineUtc is null || session.DeadlineUtc > scheduledEnd) session.DeadlineUtc=scheduledEnd;
         session.ExamSnapshotJson ??= CreateSnapshot(exam);
@@ -161,6 +163,7 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(1,{sessionId})");
         var s = await Details.FirstOrDefaultAsync(s => s.Id == sessionId) ?? throw new KeyNotFoundException("Session not found.");
         if (!s.IsFinished) throw new InvalidOperationException("Finish the attempt before reviewing it.");
+        if (verdict == "Accepted" && s.AdmissionId?.StartsWith("dev_") == true) throw new InvalidOperationException("DEV attempt: identity verification was skipped. This result cannot be accepted.");
         if (verdict == "Accepted" && s.Violations.Any(v => v.ReviewDecision != "Dismissed")) throw new InvalidOperationException("Dismiss every observation before accepting the attempt.");
         if (verdict == "Accepted" && s.EvidenceStatus != "Delivered") throw new InvalidOperationException("Complete evidence is required for acceptance. Use Inconclusive for missing recordings.");
         if (verdict == "Rejected" && !s.Violations.Any(v => v.ReviewDecision == "Confirmed")) throw new InvalidOperationException("Rejection requires a confirmed observation. Use Inconclusive for insufficient evidence.");
@@ -173,6 +176,7 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
     }
 
     private static ExamSessionDto MapToDto(ExamSession s) => new() {
+        IdentityVerificationSkipped = s.AdmissionId?.StartsWith("dev_") == true,
         Id = s.Id, ActiveClientId = s.ActiveClientId, EvidenceClientId = s.EvidenceClientId, StudentId = s.StudentId, StudentName = s.Student?.FullName ?? "", ExamId = s.ExamId, ExamTitle = s.Exam?.Title ?? "",
         StartTime = s.StartTime, EndTime = s.EndTime, Score = s.Score, ScoreCalculated = s.IsFinished && (s.Status is "Completed" or "TimedOut"), PassingScoreAtStart = s.PassingScoreAtStart, IsFinished = s.IsFinished, ViolationCount = s.Violations.Count,
         PendingObservationCount = s.Violations.Count(v => v.ReviewDecision is "Pending" or "LegacyReviewed"), ConfirmedObservationCount = s.Violations.Count(v => v.ReviewDecision == "Confirmed"),

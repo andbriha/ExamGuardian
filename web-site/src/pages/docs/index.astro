@@ -1,73 +1,15 @@
 ---
-import Layout from '../../layouts/Layout.astro'
-import Navigation from '../../components/Navigation.astro'
-
-const docSections = [
-  { category: "Current implementation", items: [{title:"11. Current contract & validation",href:"/docs/11-current-contract",desc:"Actual behavior, boundaries and release checks."}] },
-  {
-    category: "Level 1 — Context",
-    items: [
-      { title: "01. System Context & Threat Model", href: "/docs/01-system-context", desc: "Business goals, 4 cheating vectors, system actors, GDPR." }
-    ]
-  },
-  {
-    category: "Level 2 — Containers",
-    items: [
-      { title: "02. High-Level Container Architecture", href: "/docs/02-container-view", desc: "Container inventory, protocols, and latency budgets." }
-    ]
-  },
-  {
-    category: "Level 3 — Components",
-    items: [
-      { title: "03. Qt Desktop Client Internals", href: "/docs/03-qt-client", desc: "Low-level hooks, anti-VM heuristics, and chunking." },
-      { title: "04. ASP.NET Core Gateway & Data", href: "/docs/04-core-api", desc: "Clean architecture, REST endpoints, and PostgreSQL ERD." },
-      { title: "05. FastAPI AI Analytics Engine", href: "/docs/05-ai-engine", desc: "DeepFace, MediaPipe, YOLOv8, and WebRTC VAD." },
-      { title: "06. Angular Monitor & Dispatcher", href: "/docs/06-angular-monitor", desc: "Proctor cockpit, multi-chunk video scrubbing, and protocols." },
-      { title: "07. Student Portal & Distribution", href: "/docs/07-student-portal", desc: "Zero-dependency landing and Inno Setup installer." }
-    ]
-  },
-  {
-    category: "Dynamics & Infrastructure",
-    items: [
-      { title: "08. Runtime Dynamics & Sequences", href: "/docs/08-runtime-view", desc: "End-to-end lifecycle, verification, and audit flows." },
-      { title: "09. Deployment & Docker Architecture", href: "/docs/09-deployment-view", desc: "Production compose topology, volume storage, and Nginx." },
-      { title: "10. Architecture & UX Roadmap", href: "/docs/10-system-improvements", desc: "Security hardening, schema evolution, and usability roadmap." }
-    ]
-  }
-];
+import DocsLayout from '../../layouts/DocsLayout.astro'
+import { sections } from '../../data/navigation'
 ---
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="refresh" content="0;url=/docs/11-current-contract" />
-    <title>Documentation Index | ExamGuardian</title>
-  </head>
-  <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
-    <Navigation />
-
-    <main class="container mx-auto px-4 py-12 max-w-4xl flex-1">
-      <div class="mb-10 text-center">
-        <h1 class="text-4xl font-extrabold text-slate-900 mb-3 tracking-tight">ExamGuardian Documentation</h1>
-        <p class="text-slate-600 text-lg">Redirecting to <a href="/docs/11-current-contract" class="text-sky-600 underline font-semibold">11. Current Contract & Validation</a>...</p>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {docSections.map(section => (
-          <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-3">
-            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">{section.category}</h2>
-            <div class="flex flex-col gap-3">
-              {section.items.map(item => (
-                <a href={item.href} class="group block">
-                  <div class="text-base font-semibold text-sky-600 group-hover:text-sky-800 transition-colors">{item.title}</div>
-                  <div class="text-xs text-slate-500 mt-0.5">{item.desc}</div>
-                </a>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </main>
-  </body>
-</html>
+<DocsLayout title="Documentation map">
+<p class="eyebrow">Find the right page</p><h1>Documentation map</h1>
+<p>Start with a task, then use the component chapters for detail. Launch instructions describe commands; the organizer guide describes the exam workflow; architecture pages explain responsibilities and data flow.</p>
+<blockquote><p><a href="/docs/11-current-contract">Current behavior &amp; validation</a> records implementation boundaries. The roadmap describes future work, and older design chapters are not evidence that every proposed capability has shipped.</p></blockquote>
+<h2>Suggested reading paths</h2><ul>
+<li><strong>Developer:</strong> <a href="/start#development">Development launch</a> → <a href="/dev">architecture overview</a> → component reference.</li>
+<li><strong>Administrator:</strong> <a href="/start#production">Production launch</a> → <a href="/docs/09-deployment-view">deployment and storage</a> → validation limits.</li>
+<li><strong>Examiner:</strong> <a href="/guide">Run an exam</a> → <a href="/docs/11-current-contract">attempt and review rules</a>.</li>
+</ul>
+{sections.map(section => <section><h2>{section.title}</h2><ul>{section.items.filter(item => item.href !== '/docs').map(item => <li><a href={item.href}>{item.title}</a></li>)}</ul></section>)}
+</DocsLayout>

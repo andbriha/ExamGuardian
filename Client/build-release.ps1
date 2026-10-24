@@ -1,9 +1,15 @@
-param([ValidateSet("development","production")][string]$Flavor="production", [string]$QtRoot = 'C:/Qt/6.10.1/mingw_64', [string]$CompilerRoot = 'C:/Qt/Tools/mingw1310_64', [string]$OutputDirectory, [string]$InnoCompiler, [string]$NinjaPath, [string]$BuildDirectory)
+param([ValidateSet("development","production")][string]$Flavor="production", [string]$QtRoot = 'C:/Qt/6.10.1/mingw_64', [string]$CompilerRoot = 'C:/Qt/Tools/mingw1310_64', [string]$OutputDirectory, [string]$InnoCompiler, [string]$NinjaPath, [string]$BuildDirectory, [switch]$PublishToLanding)
 $ErrorActionPreference = 'Stop'
 $source = $PSScriptRoot
-if (!$OutputDirectory) { $OutputDirectory = Join-Path $source ('releases/' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
+$suffix = if ($Flavor -eq 'development') { 'Dev' } else { 'Prod' }
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $source ('releases/' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + $suffix) }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $output) { throw 'Use a new output directory. Existing releases are preserved.' }
+if ($PublishToLanding -and !$InnoCompiler) {
+    $candidates = @("${env:ProgramFiles(x86)}/Inno Setup 6/ISCC.exe", "$env:LOCALAPPDATA/Programs/Inno Setup 6/ISCC.exe")
+    $InnoCompiler = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (!$InnoCompiler) { throw 'Publishing requires an installer. Install Inno Setup 6 or pass -InnoCompiler.' }
+}
 foreach ($tool in @("$QtRoot/bin/windeployqt.exe", "$CompilerRoot/bin/g++.exe")) {
     if (!(Test-Path -LiteralPath $tool)) { throw "Required build tool not found: $tool" }
 }
@@ -42,6 +48,8 @@ if ($InnoCompiler) {
     & $InnoCompiler /Qp "/DDeployDir=$deploy" "/DBuildFlavor=$Flavor" "/DReleaseOutput=$output" (Join-Path $source 'installer.iss')
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
 }
+$portable = Join-Path $output "ExamGuardian_Client_$suffix.zip"
+Compress-Archive -Path (Join-Path $deploy '*') -DestinationPath $portable -CompressionLevel Optimal
 $commit = git -C $source rev-parse HEAD
 $dirty = [bool](git -C $source status --porcelain)
 $sourceHashes = @{}
@@ -52,3 +60,23 @@ foreach ($relative in (git -C $source ls-files --cached --others --exclude-stand
 $files = Get-ChildItem -LiteralPath $output -File -Recurse | ForEach-Object { @{ path=$_.FullName.Substring($output.TrimEnd([IO.Path]::DirectorySeparatorChar).Length+1); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash } }
 @{flavor=$Flavor;commit=$commit; workingTreeModified=$dirty; builtUtc=[DateTime]::UtcNow.ToString('O'); protocol=4; qt=$QtRoot; sources=$sourceHashes; files=@($files)} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'release-manifest.json') -Encoding utf8
 Write-Output "Verified release: $output"
+if ($PublishToLanding) {
+    $landing = Join-Path (Split-Path $source -Parent) 'Landing'
+    $artifacts = @{
+        "ExamGuardian_Setup_$suffix.exe" = Join-Path $output "ExamGuardian_Setup_$suffix.exe"
+        "ExamGuardian_Client_$suffix.exe" = $exe
+        "ExamGuardian_Client_$suffix.zip" = $portable
+        "release-manifest_$suffix.json" = Join-Path $output 'release-manifest.json'
+    }
+    foreach ($name in $artifacts.Keys) {
+        if (!(Test-Path -LiteralPath $artifacts[$name] -PathType Leaf)) { throw "Missing release artifact: $name" }
+    }
+    foreach ($name in $artifacts.Keys) {
+        $target = Join-Path $landing $name
+        $temporary = "$target.tmp"
+        Copy-Item -LiteralPath $artifacts[$name] -Destination $temporary
+        if ((Get-FileHash -LiteralPath $temporary).Hash -ne (Get-FileHash -LiteralPath $artifacts[$name]).Hash) { throw "Copy verification failed: $name" }
+        Move-Item -LiteralPath $temporary -Destination $target -Force
+    }
+    Write-Output "Published $suffix downloads to $landing"
+}

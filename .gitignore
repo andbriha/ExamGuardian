@@ -73,5 +73,6 @@ $RECYCLE.BIN/
 
 .tools/
 
-Landing.dev/*.exe
-Landing.dev/release-manifest.json
+# Legacy local downloads; both flavors are now published in Landing/.
+Landing.dev/
+Landing/*.tmp

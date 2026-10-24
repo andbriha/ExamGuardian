@@ -3,12 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
+import { GroupService } from '../../../services/group.service';
+import { RouterLink } from '@angular/router';
 import { StudentService } from '../../../services/student.service';
 
 @Component({
   selector: 'app-add-student',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './add-student.html',
   styleUrl: './add-student.css'
 })
@@ -16,11 +18,11 @@ export class AddStudentComponent implements OnInit {
   previewUrl: string | ArrayBuffer | null = null;
   selectedFile: File | null = null;
   
-  availableGroups: string[] = ['КН-2024', 'ІПЗ-2023', 'КІ-2022', '121-ІПЗ', '122-КН'];
+  availableGroups: string[] = [];
   
   newForm = {
     name: '',
-    group: 'КН-2024',
+    group: '',
     login: '',
     pass: ''
   };
@@ -32,11 +34,16 @@ export class AddStudentComponent implements OnInit {
   constructor(
     private router: Router,
     private cdr: ChangeDetectorRef,
+    private groupService: GroupService,
     private studentService: StudentService
   ) {}
 
   ngOnInit() {
     this.generateCredentials();
+    this.groupService.getAll().subscribe({
+      next: groups => { this.availableGroups = groups; this.cdr.markForCheck(); },
+      error: () => { this.errorMessage = 'Не вдалося завантажити групи. Оновіть сторінку.'; this.cdr.markForCheck(); }
+    });
   }
 
   // Українська транслітерація (паспортний стандарт КМУ)
@@ -109,6 +116,10 @@ export class AddStudentComponent implements OnInit {
   onFile = (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.type !== 'image/jpeg' || file.size > 4 * 1024 * 1024) {
+      this.errorMessage = 'Оберіть фото JPEG розміром до 4 МБ.'; e.target.value = ''; return;
+    }
+    this.errorMessage = '';
     this.selectedFile = file;
 
     const reader = new FileReader();
@@ -120,7 +131,7 @@ export class AddStudentComponent implements OnInit {
   };
 
   save = () => {
-    if (!this.newForm.name || !this.newForm.login || !this.newForm.pass) {
+    if (!this.newForm.name.trim() || !this.newForm.login.trim() || !this.newForm.pass || !this.newForm.group) {
       alert('Будь ласка, заповніть усі обов\'язкові поля');
       return;
     }
@@ -130,7 +141,7 @@ export class AddStudentComponent implements OnInit {
       fullName: this.newForm.name.trim(),
       login: this.newForm.login.trim(),
       password: this.newForm.pass.trim(),
-      group: this.newForm.group.trim() || 'Основна група',
+      group: this.newForm.group,
       role: 'Student'
     }).subscribe({
       next: (created) => {

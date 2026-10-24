@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" identifier="example" title="Example" adaptive="false" timeDependent="false">
+  <responseDeclaration identifier="RESPONSE" cardinality="single" baseType="identifier"><correctResponse><value>B</value></correctResponse></responseDeclaration>
+  <outcomeDeclaration identifier="SCORE" cardinality="single" baseType="float"/>
+  <itemBody><p>Which number is even?</p><choiceInteraction responseIdentifier="RESPONSE" maxChoices="1" shuffle="false"><simpleChoice identifier="A">3</simpleChoice><simpleChoice identifier="B">4</simpleChoice></choiceInteraction></itemBody>
+  <responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
+</assessmentItem>

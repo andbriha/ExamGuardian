@@ -19,6 +19,7 @@ class ExamViewModel : public QObject {
     Q_PROPERTY(QVariantList questions READ questions NOTIFY examLoaded)
     Q_PROPERTY(int durationSeconds READ durationSeconds NOTIFY examLoaded)
     Q_PROPERTY(QString examTitle READ examTitle NOTIFY examLoaded)
+    Q_PROPERTY(bool catalogLoading READ catalogLoading NOTIFY catalogLoadingChanged)
     Q_PROPERTY(QVariantList availableExams READ availableExams NOTIFY availableExamsChanged)
     Q_PROPERTY(QVariantMap savedAnswers READ savedAnswers NOTIFY examLoaded)
     Q_PROPERTY(QVariantMap selectedExam READ selectedExam NOTIFY selectedExamChanged)
@@ -34,6 +35,8 @@ public:
     Q_INVOKABLE void login(const QString &login, const QString &password);
     Q_INVOKABLE void loadExam();
     Q_INVOKABLE void loadAvailableExams();
+    Q_INVOKABLE double catalogTimeMs() const { return m_catalogServerTime + (m_catalogClock.isValid() ? m_catalogClock.elapsed() : 0); }
+    bool catalogLoading() const { return m_catalogLoading; }
     Q_INVOKABLE void selectExam(int id) { m_examId = id; m_admissionToken.clear(); emit selectedExamChanged(); }
     Q_INVOKABLE void setAdmissionToken(const QString &token) { m_admissionToken = token; }
     Q_INVOKABLE bool configureServer(const QString &url);
@@ -64,6 +67,9 @@ signals:
     void authTokenChanged(QString token);
     void examLoaded();
     void availableExamsChanged();
+    void catalogLoadingChanged();
+    void catalogLoaded();
+    void catalogLoadFailed(const QString &message);
     void selectedExamChanged();
     void examLoadFailed(const QString &message);
     void sessionTerminated();
@@ -91,6 +97,9 @@ private:
     int m_durationSeconds = 3600;
     QString m_examTitle = "Завантаження іспиту...";
     QVariantList m_availableExams;
+    bool m_catalogLoading = false;
+    double m_catalogServerTime = 0;
+    QElapsedTimer m_catalogClock;
     QVariantMap m_savedAnswers;
     QVariantMap m_latestAnswers;
     bool m_saveInFlight = false;

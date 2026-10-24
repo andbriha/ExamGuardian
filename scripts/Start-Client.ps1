@@ -12,7 +12,8 @@ try {
     $capabilities = Invoke-RestMethod -Uri "$env:EXAMGUARDIAN_URL/verify/capabilities" -TimeoutSec 15
     if (3 -notin $capabilities.supported_protocols -or !$capabilities.audio_activity) { throw 'Expected verification protocol 3 with automatic audio. Rebuild the AI service.' }
 } catch {
-    throw "AI verification is unavailable or outdated at $env:EXAMGUARDIAN_URL. Start the matching environment with run.ps1 before launching the client. $($_.Exception.Message)"
+    if ($Production) { throw "AI verification is unavailable or outdated at $env:EXAMGUARDIAN_URL. Start the matching environment before launching the production client. $($_.Exception.Message)" }
+    Write-Warning 'AI verification is unavailable. A DEV identity bypass can be requested from the DEV server; normal verification and continuous AI analysis require a healthy AI service.'
 }
 $env:PATH="$QtRoot/bin;$CompilerRoot/bin;"+$env:PATH
 $build=Join-Path $root $(if($Production){"Client/build/production"}else{"Client/build/dev"})
@@ -21,4 +22,4 @@ if ($LASTEXITCODE -ne 0) {throw 'Client configuration failed.'}
 cmake --build $build --parallel 4
 if ($LASTEXITCODE -ne 0) {throw 'Client build failed.'}
 Write-Host "Starting $flavor client against $env:EXAMGUARDIAN_URL"
-Start-Process -FilePath (Join-Path $build 'appClient.exe') -WindowStyle Hidden
+Start-Process -FilePath (Join-Path $build 'appClient.exe') -WindowStyle Normal

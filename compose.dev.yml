@@ -4,6 +4,7 @@ services:
       dockerfile: Dockerfile.dev
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      Development__AllowIdentityBypass: ${DEV_ALLOW_IDENTITY_BYPASS:-true}
       DOTNET_USE_POLLING_FILE_WATCHER: "1"
       DOTNET_WATCH_RESTART_ON_RUDE_EDIT: "1"
     volumes:
@@ -43,7 +44,6 @@ services:
     volumes:
       - ./monitor/nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
       - ./Landing:/usr/share/nginx/html/landing:ro
-      - ./Landing.dev:/opt/dev-downloads:ro
 
     depends_on:
       ai_service:

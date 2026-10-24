@@ -1,6 +1,8 @@
 import { RouterModule } from '@angular/router';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { GradeExportComponent } from '../grade-export/grade-export';
 
 import { ExamService, ExamDto } from '../../../services/exam.service';
 import { SessionService, ExamSessionDto } from '../../../services/session.service';
@@ -21,17 +23,61 @@ export interface CompletedExamView {
   integrityVerdict?: string;
   integrityNotes?: string;
   evidenceStatus?: string;
+  identityVerificationSkipped?: boolean;
 }
 
 @Component({
   selector: 'app-reports-hub',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, FormsModule, GradeExportComponent],
   templateUrl: './reports-hub.html',
   styleUrl: './reports-hub.css'
 })
 export class ReportsHubComponent implements OnInit {
   completedExams: CompletedExamView[] = [];
+  exams: ExamDto[] = [];
+  review: ExamSessionDto | null = null;
+  reviewLoading = false;
+  reviewSaving = false;
+  reviewVerdict = 'Accepted';
+  reviewNotes = '';
+  reviewError = '';
+  reviewHistory: { verdict: string; notes: string; at: string; reviewerId: string }[] = [];
+
+  openReview(id: string) {
+    const sameAttempt = this.review?.id === Number(id);
+    if (!sameAttempt) { this.reviewNotes = ''; this.reviewVerdict = 'Accepted'; }
+    this.review = null; this.reviewLoading = true; this.reviewError = '';
+    this.sessionService.getById(Number(id)).subscribe({
+      next: session => {
+        this.review = session; this.reviewLoading = false;
+        try { const history = JSON.parse(session.integrityHistoryJson || '[]'); this.reviewHistory = Array.isArray(history) ? history.slice().reverse() : []; }
+        catch { this.reviewHistory = []; }
+        this.cdr.markForCheck();
+      },
+      error: () => { this.reviewError = 'Не вдалося оновити стан спроби.'; this.reviewLoading = false; this.cdr.markForCheck(); }
+    });
+  }
+  evidenceLabel(status: string): string {
+    return ({Delivered:'Доставлено повністю',Pending:'Очікується доставка',Partial:'Доставлено частково',Unknown:'Стан невідомий',Expired:'Строк зберігання минув'} as Record<string,string>)[status] || status;
+  }
+  reviewBlock(verdict: string): string {
+    const s = this.review;
+    if (verdict === 'Accepted' && s?.identityVerificationSkipped) return 'DEV: перевірку особи пропущено. Результат не можна підтвердити або експортувати.';
+    if (!s?.isFinished) return 'Спочатку завершіть спробу.';
+    if (verdict === 'Accepted' && s.evidenceStatus !== 'Delivered') return 'Дочекайтеся повної доставки доказів або оберіть «Недостатньо доказів».';
+    if (verdict === 'Accepted' && ((s.pendingObservationCount ?? 0) + (s.confirmedObservationCount ?? 0) > 0)) return 'Для прийняття потрібно перевірити й відхилити всі сигнали.';
+    if (verdict === 'Rejected' && !(s.confirmedObservationCount! > 0)) return 'Спочатку підтвердьте хоча б один сигнал у матеріалах сесії.';
+    return '';
+  }
+  saveReview() {
+    if (!this.review || this.reviewSaving || this.reviewBlock(this.reviewVerdict) || !this.reviewNotes.trim()) return;
+    this.reviewSaving = true; this.reviewError = '';
+    this.sessionService.review(this.review.id, this.reviewVerdict, this.reviewNotes.trim()).subscribe({
+      next: () => { this.reviewSaving = false; this.review = null; this.loadReports(); },
+      error: error => { this.reviewSaving = false; this.reviewError = error.error?.message || 'Не вдалося зберегти рішення. Оновіть стан спроби.'; this.cdr.markForCheck(); }
+    });
+  }
   isLoading = true;
   errorMessage = '';
 
@@ -46,11 +92,13 @@ export class ReportsHubComponent implements OnInit {
   }
 
   loadReports() {
+    this.errorMessage = '';
     this.isLoading = true;
     this.sessionService.getAll().subscribe({
       next: (sessions) => {
         this.examService.getAll().subscribe({
           next: (exams) => {
+            this.exams = exams;
             this.buildViews(sessions, exams);
             this.isLoading = false;
             this.cdr.detectChanges();
@@ -109,7 +157,7 @@ export class ReportsHubComponent implements OnInit {
           studentName: s.studentName,
           status,
           statusText,
-          durationSec, examId: s.examId, integrityVerdict: s.integrityVerdict, integrityNotes: s.integrityNotes, evidenceStatus: s.evidenceStatus
+          durationSec, identityVerificationSkipped: s.identityVerificationSkipped, examId: s.examId, integrityVerdict: s.integrityVerdict, integrityNotes: s.integrityNotes, evidenceStatus: s.evidenceStatus
         };
       });
     } else {
@@ -117,11 +165,6 @@ export class ReportsHubComponent implements OnInit {
     }
   }
 
-  reviewReport(id: string, verdict: string): void {
-    const notes=prompt('Підстава висновку для протоколу та апеляції:');
-    if (!notes?.trim()) return;
-    this.sessionService.review(Number(id),verdict,notes).subscribe({next: () => this.loadReports(),error: e => { this.errorMessage = e.error?.message || 'Висновок не збережено.'; this.cdr.detectChanges(); }});
-  }
   verdictLabel(verdict?: string): string { return ({UnderReview:'Очікує висновку',Accepted:'Перевірено: прийнято',Rejected:'Добросовісність не підтверджено',Inconclusive:'Недостатньо доказів'} as Record<string,string>)[verdict || 'UnderReview'] || 'Очікує висновку'; }
   downloadReport = (id: string) => {
     const report = this.completedExams.find(r => r.id === id);
@@ -178,6 +221,7 @@ export class ReportsHubComponent implements OnInit {
                 ${report?.violationsCount ?? 0} зафіксовано
               </span>
             </div>
+            <div class="row"><span class="label">Перевірка особи:</span><span>${report?.identityVerificationSkipped ? "DEV: пропущено, тестова спроба" : "Звичайний допуск"}</span></div>
             <div class="row"><span class="label">Висновок прокторингу:</span><span>${escapeHtml(this.verdictLabel(report?.integrityVerdict))}</span></div>
             <div class="row"><span class="label">Підстава висновку:</span><span>${escapeHtml(report?.integrityNotes || 'Висновок ще не надано')}</span></div>
             <div class="row"><span class="label">Доставка доказів:</span><span>${escapeHtml(report?.evidenceStatus || 'Unknown')}</span></div>

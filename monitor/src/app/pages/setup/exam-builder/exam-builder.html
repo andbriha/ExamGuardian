@@ -1,4 +1,6 @@
 <div class="builder-wrap">
+  <h2>Створення іспиту</h2>
+  <p>Оберіть групу, призначте час і додайте запитання. Студенти побачать розклад до початку іспиту.</p>
 
   <div class="card settings-card">
     <div class="card-header">
@@ -7,30 +9,30 @@
     
     <div class="settings-grid">
       <div class="input-group full">
-        <label>Назва дисципліни <span class="required">*</span></label>
-        <input type="text" [(ngModel)]="exam.title" placeholder="Напр: Об'єктно-орієнтоване програмування">
+        <label for="exam-title">Назва дисципліни <span class="required">*</span></label>
+        <input type="text" id="exam-title" [(ngModel)]="exam.title" placeholder="Напр: Об'єктно-орієнтоване програмування">
       </div>
       
       <div class="input-group full">
-        <label>Опис (необов'язково)</label>
-        <input type="text" [(ngModel)]="exam.description" placeholder="Короткий опис іспиту для студентів">
+        <label for="exam-description">Опис (необов'язково)</label>
+        <input type="text" id="exam-description" [(ngModel)]="exam.description" placeholder="Короткий опис іспиту для студентів">
       </div>
       
       <div class="input-group">
-        <label>Дата та час початку <span class="required">*</span></label>
-        <input type="datetime-local" [(ngModel)]="exam.startTime">
-        <label>Часовий пояс розкладу</label>
-        <select [(ngModel)]="exam.timeZoneId"><option value="Europe/Chisinau">Europe/Chisinau</option><option value="Europe/Kyiv">Europe/Kyiv</option><option value="UTC">UTC</option></select>
+        <label for="exam-startTime">Дата та час початку <span class="required">*</span></label>
+        <input type="datetime-local" id="exam-startTime" [(ngModel)]="exam.startTime">
+        <label for="exam-timeZoneId">Часовий пояс розкладу</label>
+        <select id="exam-timeZoneId" [(ngModel)]="exam.timeZoneId"><option value="Europe/Chisinau">Europe/Chisinau</option><option value="Europe/Kyiv">Europe/Kyiv</option><option value="UTC">UTC</option></select>
         <small>Тривалість рахується від призначеного початку для всіх студентів. Пізній вхід не подовжує іспит.</small>
       </div>
       
       <div class="input-group">
-        <label>Тривалість (хв) <span class="required">*</span></label>
-        <input type="number" [(ngModel)]="exam.durationMinutes" min="1" max="480">
+        <label for="exam-durationMinutes">Тривалість (хв) <span class="required">*</span></label>
+        <input type="number" id="exam-durationMinutes" [(ngModel)]="exam.durationMinutes" min="1" max="480">
       </div>
-      <div class="input-group"><label>Група учасників</label><input [(ngModel)]="exam.allowedGroup" placeholder="Порожньо — усі студенти"></div>
-      <div class="input-group"><label>Дозволених спроб</label><input type="number" [(ngModel)]="exam.maxAttempts" min="1" max="10"></div>
-      <div class="input-group"><label>Прохідний бал зі 100</label><input type="number" [(ngModel)]="exam.passingScore" min="0" max="100"></div>
+      <div class="input-group"><label for="exam-allowedGroup">Група учасників</label><select aria-label="Група учасників" id="exam-allowedGroup" [(ngModel)]="exam.allowedGroup"><option value="">Усі студенти</option>@for (group of groups; track group) { <option [value]="group">{{ group }}</option> }</select><a routerLink="/groups">Керувати групами</a><small *ngIf="groupsError" role="alert">Не вдалося завантажити групи. Оновіть сторінку.</small></div>
+      <div class="input-group"><label for="exam-maxAttempts">Дозволених спроб</label><input type="number" id="exam-maxAttempts" [(ngModel)]="exam.maxAttempts" min="1" max="10"></div>
+      <div class="input-group"><label for="exam-passingScore">Прохідний бал зі 100</label><input type="number" id="exam-passingScore" [(ngModel)]="exam.passingScore" min="0" max="100"></div>
       <div class="input-group full"><label><input type="checkbox" [(ngModel)]="exam.allowSpeech"> Мовлення дозволене правилами іспиту</label></div>
       <div class="input-group full"><label><input type="checkbox" [(ngModel)]="exam.flagHeadMovement"> Позначати тривалий поворот або нахил голови для перевірки</label></div>
       <div class="input-group full"><label><input type="checkbox" [(ngModel)]="exam.allowBook"> Книги дозволені</label><label><input type="checkbox" [(ngModel)]="exam.allowLaptop"> Додатковий ноутбук дозволений</label></div>
@@ -38,12 +40,31 @@
     </div>
   </div>
 
+ <section class="card" aria-labelledby="qti-heading">
+   <h3 id="qti-heading">Імпорт готових завдань · QTI</h3>
+   <p>XML або ZIP QTI 2.1/2.2, до 10 МБ. Текстові запитання з однією правильною відповіддю, match_correct. Імпорт додає запитання до чернетки.</p>
+   <label for="qti-file">Оберіть пакет завдань</label>
+   <input id="qti-file" type="file" accept=".xml,.zip" [disabled]="importing || saving" (change)="importQti($event)">
+   <p *ngIf="importing" role="status">Перевірка пакета…</p>
+   <p *ngIf="importError" role="alert">{{ importError }}</p>
+   @if (qtiPreview; as preview) {
+     <p>{{ preview.notice }}</p>
+     <p>Розпізнано запитань: {{ preview.questions.length }}. Помилок: {{ preview.issues.length }}.</p>
+     <ul>@for (issue of preview.issues; track $index) { <li>{{ issue.file }}: {{ issue.message }}</li> }</ul>
+     <details><summary>Переглянути запитання й відповіді</summary>
+       <ol>@for (question of preview.questions; track $index) { <li><strong>{{ question.text }}</strong><p>Правильна відповідь: {{ question.options[question.correctIndex] }} · {{ question.points }} бал</p></li> }</ol>
+     </details>
+     <button type="button" [disabled]="!preview.canImport || saving" (click)="applyImport()">Додати перевірені запитання</button>
+     <button type="button" (click)="qtiPreview = null">Скасувати імпорт</button>
+     <p *ngIf="!preview.canImport">Виправте всі помилки в пакеті: частковий імпорт заблоковано.</p>
+   }
+ </section>
  <div class="questions-list">
     @for (q of questions; track $index; let qIndex = $index) {
       <div class="card question-card">
         
         <div class="q-header">
-          <span class="q-num">Питання {{ qIndex + 1 }}</span>
+          <span class="q-num">Питання {{ qIndex + 1 }} · {{ q.kind === 'trueFalse' ? 'Правда / Неправда' : 'Одна відповідь' }}</span>
           <div class="q-header-right">
             <label>Балів:</label>
             <input type="number" [(ngModel)]="q.points" min="1" max="10" class="points-input">
@@ -71,18 +92,18 @@
                      [(ngModel)]="q.correctIndex" 
                      title="Відмітити як правильну відповідь">
               
-              <input type="text" [(ngModel)]="opt.text" [placeholder]="'Варіант ' + (optIndex + 1)">
+              <input type="text" [(ngModel)]="opt.text" [readonly]="q.kind === 'trueFalse'" [placeholder]="'Варіант ' + (optIndex + 1)">
               
               <button class="btn-icon btn-danger" 
                       (click)="removeOption(q, optIndex)" 
-                      [disabled]="q.options.length <= 2">✕</button>
+                      [disabled]="q.kind === 'trueFalse' || q.options.length <= 2">✕</button>
             </div>
           }
           
           <div class="options-footer">
             <button class="btn-ghost btn-sm" 
                     (click)="addOption(q)" 
-                    [disabled]="q.options.length >= 6">
+                    [disabled]="q.kind === 'trueFalse' || q.options.length >= 10">
               + Додати варіант
             </button>
             <small class="hint">Поточна правильна відповідь: <strong>Варіант {{ q.correctIndex + 1 }}</strong></small>
@@ -94,8 +115,10 @@
   </div>
 
   <button class="btn-add-question" (click)="addQuestion()">
-    + Додати нове питання
+    + Питання з однією відповіддю
   </button>
+
+  <button class="btn-add-question" (click)="addQuestion('trueFalse')">+ Правда / Неправда</button>
 
   @if (errorMsg) {
     <div class="msg error">⚠ {{ errorMsg }}</div>
