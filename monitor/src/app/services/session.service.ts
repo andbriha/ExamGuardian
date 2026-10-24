@@ -5,6 +5,7 @@ import { environment } from '../../environments/environment';
 
 export interface ExamSessionDto {
   id: number;
+  identityVerificationSkipped?: boolean;
   studentId: string;
   studentName: string;
   examId: number;
@@ -27,6 +28,8 @@ export interface ExamSessionDto {
   integrityVerdict: string;
   integrityNotes?: string;
   integrityReviewedAt?: string;
+  integrityReviewedBy?: string;
+  integrityHistoryJson?: string;
 }
 
 @Injectable({

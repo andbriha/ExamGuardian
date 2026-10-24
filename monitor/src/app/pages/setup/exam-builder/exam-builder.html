@@ -40,12 +40,31 @@
     </div>
   </div>
 
+ <section class="card" aria-labelledby="qti-heading">
+   <h3 id="qti-heading">Імпорт готових завдань · QTI</h3>
+   <p>XML або ZIP QTI 2.1/2.2, до 10 МБ. Текстові запитання з однією правильною відповіддю, match_correct. Імпорт додає запитання до чернетки.</p>
+   <label for="qti-file">Оберіть пакет завдань</label>
+   <input id="qti-file" type="file" accept=".xml,.zip" [disabled]="importing || saving" (change)="importQti($event)">
+   <p *ngIf="importing" role="status">Перевірка пакета…</p>
+   <p *ngIf="importError" role="alert">{{ importError }}</p>
+   @if (qtiPreview; as preview) {
+     <p>{{ preview.notice }}</p>
+     <p>Розпізнано запитань: {{ preview.questions.length }}. Помилок: {{ preview.issues.length }}.</p>
+     <ul>@for (issue of preview.issues; track $index) { <li>{{ issue.file }}: {{ issue.message }}</li> }</ul>
+     <details><summary>Переглянути запитання й відповіді</summary>
+       <ol>@for (question of preview.questions; track $index) { <li><strong>{{ question.text }}</strong><p>Правильна відповідь: {{ question.options[question.correctIndex] }} · {{ question.points }} бал</p></li> }</ol>
+     </details>
+     <button type="button" [disabled]="!preview.canImport || saving" (click)="applyImport()">Додати перевірені запитання</button>
+     <button type="button" (click)="qtiPreview = null">Скасувати імпорт</button>
+     <p *ngIf="!preview.canImport">Виправте всі помилки в пакеті: частковий імпорт заблоковано.</p>
+   }
+ </section>
  <div class="questions-list">
     @for (q of questions; track $index; let qIndex = $index) {
       <div class="card question-card">
         
         <div class="q-header">
-          <span class="q-num">Питання {{ qIndex + 1 }}</span>
+          <span class="q-num">Питання {{ qIndex + 1 }} · {{ q.kind === 'trueFalse' ? 'Правда / Неправда' : 'Одна відповідь' }}</span>
           <div class="q-header-right">
             <label>Балів:</label>
             <input type="number" [(ngModel)]="q.points" min="1" max="10" class="points-input">
@@ -73,18 +92,18 @@
                      [(ngModel)]="q.correctIndex" 
                      title="Відмітити як правильну відповідь">
               
-              <input type="text" [(ngModel)]="opt.text" [placeholder]="'Варіант ' + (optIndex + 1)">
+              <input type="text" [(ngModel)]="opt.text" [readonly]="q.kind === 'trueFalse'" [placeholder]="'Варіант ' + (optIndex + 1)">
               
               <button class="btn-icon btn-danger" 
                       (click)="removeOption(q, optIndex)" 
-                      [disabled]="q.options.length <= 2">✕</button>
+                      [disabled]="q.kind === 'trueFalse' || q.options.length <= 2">✕</button>
             </div>
           }
           
           <div class="options-footer">
             <button class="btn-ghost btn-sm" 
                     (click)="addOption(q)" 
-                    [disabled]="q.options.length >= 6">
+                    [disabled]="q.kind === 'trueFalse' || q.options.length >= 10">
               + Додати варіант
             </button>
             <small class="hint">Поточна правильна відповідь: <strong>Варіант {{ q.correctIndex + 1 }}</strong></small>
@@ -96,8 +115,10 @@
   </div>
 
   <button class="btn-add-question" (click)="addQuestion()">
-    + Додати нове питання
+    + Питання з однією відповіддю
   </button>
+
+  <button class="btn-add-question" (click)="addQuestion('trueFalse')">+ Правда / Неправда</button>
 
   @if (errorMsg) {
     <div class="msg error">⚠ {{ errorMsg }}</div>

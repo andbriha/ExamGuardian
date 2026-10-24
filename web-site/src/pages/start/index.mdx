@@ -78,7 +78,7 @@ Use `BOOTSTRAP_EXAMINER_LOGIN` and `BOOTSTRAP_EXAMINER_PASSWORD` from `.env.dev`
 ./scripts/Start-Client.ps1
 ```
 
-This script checks AI capabilities, builds the development client, and selects the application origin from `.env.dev`. It does not start the server. The DEV controls appear at startup; `Ctrl+Shift+D` reopens them. Overrides cover local environment restrictions, not identity admission, recording, or server rules.
+This script checks AI capabilities (warning in DEV, required in production), builds the development client, and selects the application origin from `.env.dev`. It does not start the server. The DEV controls appear at startup; `Ctrl+Shift+D` reopens them. Overrides cover local environment restrictions and an optional DEV-only identity bypass; recording and server exam rules remain enforced.
 
 Core, AI, Angular, and documentation use source watches/mounts. Rebuild after dependency or container configuration changes. Qt changes require another native build.
 
@@ -139,14 +139,14 @@ For a local production-flavor build connected to `.env.production`:
 `Start-Client.ps1` builds a Debug executable for the chosen flavor. For distribution, build a Release package instead:
 
 ```powershell
-./Client/build-release.ps1 -Flavor production -InnoCompiler 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+./Client/build-release.ps1 -Flavor production -PublishToLanding
 # Separate DEV installer, when needed:
-./Client/build-release.ps1 -Flavor development -InnoCompiler 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+./Client/build-release.ps1 -Flavor development -PublishToLanding
 ```
 
 Omit `-InnoCompiler` to create the packaged application without an installer. Defaults expect Qt at `C:/Qt/6.10.1/mingw_64` and MinGW at `C:/Qt/Tools/mingw1310_64`; pass `-QtRoot` and `-CompilerRoot` for other locations. The release script also accepts `-NinjaPath`.
 
-Each release goes into a new directory under `Client/releases/` with a manifest of source state and hashes. Publishing is separate: copy the verified production installer to `Landing/Online_Proctoring_System_Setup.exe`, or the DEV installer to `Landing.dev/ExamGuardian_Dev_Setup.exe`. Do not assume a pre-existing portal binary matches your sources.
+Each release goes into a new directory under `Client/releases/` with a manifest of source state and hashes. `-PublishToLanding` discovers Inno Setup 6 (or accepts `-InnoCompiler`), builds the installer and publishes verified files to the shared `Landing/` folder. Installers are named `ExamGuardian_Setup_Dev.exe` and `ExamGuardian_Setup_Prod.exe`; portable ZIPs with Qt libraries are named `ExamGuardian_Client_Dev.zip` and `ExamGuardian_Client_Prod.zip`. The site serves the matching environment through its common download links. `Landing.dev` is no longer needed. Omit `-PublishToLanding` to build a separate release without updating the site.
 
 The login screen accepts the server origin. `EXAMGUARDIAN_URL` overrides it. Use the application origin (HTTPS in production), without `/login`, `/api`, or `/landing/`.
 
@@ -192,3 +192,37 @@ The current `scripts/Backup.ps1` invokes bare `docker compose` and defaults to t
 | Docs work but panel does not | Use the application port for `/login`; inspect the full stack, not just `docs`. |
 
 **Next:** [Run your first exam](/guide) · [Understand service responsibilities](/dev)
+
+
+## Launch on Linux
+
+Install Docker Engine with the Docker Compose v2 plugin, Bash and Python 3.9 or newer. Your user must be able to run Docker. Use a Compose version that supports the `!override` tag used by the production overlay. Run from the repository:
+
+```bash
+bash run.sh --check       # initialize .env.dev if absent; validate, do not start
+bash run.sh               # build and start development, wait for health checks
+bash run.sh --status
+bash run.sh --stop        # stop only this environment; preserve volumes
+```
+
+`run.sh` delegates to `scripts/start_environment.py`; it uses the same Compose overlays and project names as Windows. No PowerShell is required. The first dev check/start creates `.env.dev` with random secrets and permissions 0600, selecting a free documentation port in 4321–4331. Read the generated examiner login/password from that file locally. Existing configuration is preserved; environment files are parsed as data and never sourced as shell scripts.
+
+For production, copy `.env.production.example` to `.env.production`, replace every placeholder, configure your actual HTTPS `PUBLIC_ORIGIN` and an absolute Linux `TLS_DIRECTORY` containing `fullchain.pem` and `privkey.pem`. Restrict the configuration file with `chmod 600 .env.production`.
+
+```bash
+bash run.sh --production --check
+bash run.sh --production
+bash run.sh --production --status
+bash run.sh --production --stop
+```
+
+The launcher starts the server services, monitor and (in dev) documentation. It does not install Docker, open firewall ports or build the native student client. Build the Qt client separately for Linux; a Windows `.exe` is not a Linux client. Linux X11 device behavior still needs practical validation, and Wayland blocking is unsupported.
+
+
+## Skip AI identity verification in development
+
+Start the dev environment with `run.ps1` or `bash run.sh` and build the **development** Qt client. Open DEV controls (`Ctrl+Shift+D`) and enable **Skip AI identity and liveness verification (DEV only)** before starting an attempt. It skips the face/pose admission challenge, not login, recording, continuous monitoring, group restrictions or the examination window.
+
+The dev Compose profile enables `Development__AllowIdentityBypass` by default. Set `DEV_ALLOW_IDENTITY_BYPASS=false` in `.env.dev` and restart the dev stack to disable it. Outside Compose, both a Core build with `-p:EnableDevelopmentTools=true` and `ASPNETCORE_ENVIRONMENT=Development` plus `Development__AllowIdentityBypass=true` are required. The normal production artifact does not contain the admission endpoint; setting an environment flag cannot enable it.
+
+The client requests a server-signed token scoped to its authenticated student and selected exam, valid for two minutes. A denied request reports an error instead of falling back to an unverified start. The attempt is permanently marked `identityVerificationSkipped`, including after resume with ordinary verification. The archive and printable report show the marker; acceptance and grade export are blocked for this test attempt. Restart the client to unlock DEV controls after starting an attempt.

@@ -8,12 +8,12 @@
 #define MyAppName "ExamGuardian DEV Client"
 #define MyAppId "ExamGuardian.Development.Client"
 #define MyAppDirectory "ExamGuardianDev"
-#define MyInstallerName "ExamGuardian_Dev_Setup"
+#define MyInstallerName "ExamGuardian_Setup_Dev"
 #else
 #define MyAppName "Online Proctoring System Client"
 #define MyAppId "{{8B7B2B64-94E5-4D56-A8F2-7A950BC71D0E}"
 #define MyAppDirectory "OnlineProctoringSystem"
-#define MyInstallerName "Online_Proctoring_System_Setup"
+#define MyInstallerName "ExamGuardian_Setup_Prod"
 #endif
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Online Proctoring System"

@@ -39,3 +39,27 @@ Started the actual development stack at http://127.0.0.1:8081 and built the nati
 ## Native catalog preview
 
 With `EXAMGUARDIAN_BUILD_TESTS=ON`, build `catalog_preview`. Set `EXAMGUARDIAN_URL` to a local HTTP origin on `127.0.0.1`, and supply `EXAMGUARDIAN_TEST_STUDENT_LOGIN` (must start with `ui_test_`) and `EXAMGUARDIAN_TEST_STUDENT_PASSWORD` for a dedicated fixture account. It performs ordinary server authentication and renders the production catalog QML with the real viewmodel; it does not capture media or start an exam. Never use participant credentials for this preview. Normal users launch `scripts/Start-Client.ps1`.
+
+
+## Teacher decisions and interchange — 2026-10-24
+
+- Replaced archive decision prompts with a form showing evidence, observation counts, reason, server errors and decision history. Verified the blocked Accepted state visually for an existing session without changing its verdict.
+- Added examiner-scoped CSV grade export. Latest attempt per student wins; only Accepted calculated results qualify. Late evidence removes export eligibility. Expired recordings preserve an already accepted grade. Moodle requires manual identifier/grade mapping; no remote Moodle instance was connected or tested.
+- Added QTI 2.1/2.2 single-choice text XML/ZIP preview and draft import. Visually uploaded `tests/fixtures/qti-single-choice.xml`, added it to an unsaved draft and verified option B remained correct. Unsupported content blocks import; test selection/scoring rules and media are outside the supported subset.
+- API contract tests cover authorization, latest-attempt selection, late-evidence invalidation, QTI preview/no persistence, malformed packages and unsafe XML/ZIP. UI tests cover blocked decisions, conflict preservation and draft import.
+
+
+### Group export and Linux launcher follow-up
+
+Export now has a separate group-first component and a shared eligibility service. Only exams with eligible results are listed; empty groups explain exclusion reasons. Verified the actual local group view with two pending teacher decisions and no download buttons. API tests download and parse CSV, isolate students from different groups (including no group), enforce teacher ownership and reject an older Accepted attempt when a newer attempt exists.
+
+Added a true/false authoring preset and QTI fixture; its normal create/start/submit path scores correctly in integration tests. QTI package reading and interaction parsing are now separate services behind IQtiItemParser.
+
+Linux Bash entry point and Python launcher were run inside a Linux container (syntax/help and mocked Compose lifecycle tests); real Compose configuration was validated on the workstation. Full production launch on a separate Linux host and physical Qt device behavior remain unverified.
+
+
+### Optional DEV identity bypass
+
+Added biometricAdmission to the existing client override registry. The DEV-only server endpoint issues a two-minute token bound to student/exam; normal admission still enforces schedule, group and attempts. Attempts retain an identityVerificationSkipped marker across resume, display it in the archive/report and cannot be Accepted or exported. Recording and continuous AI monitoring remain enabled.
+
+Validated both API artifacts with separate disposable integration runs (25 executed contracts each, one flavor-specific skip, plus retention), built development and production Qt clients and passed the native override/freeze test. Updated local dev Compose services. This does not constitute a new physical-camera end-to-end verification run.

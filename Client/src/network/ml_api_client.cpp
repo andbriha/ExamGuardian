@@ -8,6 +8,10 @@
 #include <QDebug>
 #include <QStringList>
 #include <QElapsedTimer>
+#include <QJsonArray>
+#ifdef EXAMGUARDIAN_DEVELOPMENT
+#include "development_viewmodel.h"
+#endif
 
 MlApiClient::MlApiClient(QObject *parent) : QObject(parent) {
     m_manager = new QNetworkAccessManager(this);
@@ -29,6 +33,12 @@ void MlApiClient::cancelVerification() {
 void MlApiClient::fetchChallenge() {
     cancelVerification();
     const auto epoch = m_verificationEpoch;
+#ifdef EXAMGUARDIAN_DEVELOPMENT
+    if (DevelopmentViewModel::current && DevelopmentViewModel::current->bypass("biometricAdmission")) {
+        fetchDevelopmentAdmission(epoch);
+        return;
+    }
+#endif
     QNetworkRequest request(QUrl(clientServerUrl() + QString("/verify/challenge?client_protocol=3&exam_id=%1").arg(m_examId)));
 
     if (!m_authToken.isEmpty()) {
@@ -52,6 +62,29 @@ void MlApiClient::fetchChallenge() {
         reply->deleteLater();
     });
 }
+
+#ifdef EXAMGUARDIAN_DEVELOPMENT
+void MlApiClient::fetchDevelopmentAdmission(quint64 epoch) {
+    QNetworkRequest request(QUrl(clientServerUrl() + "/api/development/admissions"));
+    request.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    auto *reply = m_manager->post(request, QJsonDocument(QJsonObject{
+        {"examId", m_examId}, {"overrides", QJsonArray{"biometricAdmission"}}
+    }).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply, epoch]() {
+        if (epoch != m_verificationEpoch) { reply->deleteLater(); return; }
+        const auto body = QJsonDocument::fromJson(reply->readAll()).object();
+        const auto token = body["admissionToken"].toString();
+        if (reply->error() != QNetworkReply::NoError || token.isEmpty() || !body["identityVerificationSkipped"].toBool()) {
+            emit verificationError("DEV-пропуск не дозволений сервером. Увімкніть його на DEV-сервері або вимкніть перемикач і пройдіть звичайну перевірку.");
+        } else {
+            emit admissionReceived(token);
+            emit verificationFinished(true, "development", "identity_skipped", 0);
+        }
+        reply->deleteLater();
+    });
+}
+#endif
 
 void MlApiClient::sendVerificationFrame(const QImage &currentFrame, const QString &task) {
     if (currentFrame.isNull() || m_verificationPending || m_challengeId.isEmpty()) return;

@@ -58,12 +58,22 @@ Create students, enroll a JPEG reference photograph, then create an exam with gr
 Install Qt 6.10.1 MinGW, matching compiler, CMake and Ninja. Build a fresh release from source:
 
 ```powershell
-./Client/build-release.ps1
-# Optional installer:
-./Client/build-release.ps1 -InnoCompiler 'C:/Program Files (x86)/Inno Setup 6/ISCC.exe'
+./Client/build-release.ps1 -Flavor development -PublishToLanding
+./Client/build-release.ps1 -Flavor production -PublishToLanding
+# Build a separate release without updating portal downloads:
+./Client/build-release.ps1 -Flavor production
 ```
 
-Output goes to a new `Client/releases/` directory with a manifest of hashes and source state. Copy a verified installer to the portal deliberately; existing portal binaries are not assumed to match this working tree. The login screen configures the server origin. `EXAMGUARDIAN_URL` overrides it. Use the same origin for all services.
+`scripts/Start-Client.ps1` configures and rebuilds the Qt client before launching it; add `-Production` for the production flavor. `run.ps1` builds/starts the Docker services; it does not compile the native Qt application.
+
+`Client/build-release.ps1` produces a release under `Client/releases/` with bundled Qt libraries, a portable ZIP, source hashes and a startup check. `-PublishToLanding` also builds the installer (Inno Setup 6 is discovered automatically, or pass `-InnoCompiler`) and copies verified artifacts into the shared `Landing/` directory:
+
+- `ExamGuardian_Setup_Dev.exe` / `ExamGuardian_Setup_Prod.exe`: complete installers.
+- `ExamGuardian_Client_Dev.zip` / `ExamGuardian_Client_Prod.zip`: portable clients including Qt libraries; extract the entire archive before running its EXE.
+- `ExamGuardian_Client_Dev.exe` / `ExamGuardian_Client_Prod.exe`: binary-only updates requiring the matching deployed libraries.
+- `release-manifest_Dev.json` / `release-manifest_Prod.json`: build identity and SHA-256 hashes.
+
+`Landing.dev` is no longer used. Both environments mount `Landing/`; Nginx selects the matching flavor for the common download URLs and sends the suffixed filename to the browser. Production refuses direct DEV downloads, and development refuses direct PROD downloads. Missing packages return 404. Each flavor is published independently. The login screen configures the server origin; `EXAMGUARDIAN_URL` overrides it.
 
 Windows and Linux builds, headless QML startup and persistent upload-queue tests pass. Windows Qt login/admission/autosave/submission was checked against the disposable Core API. Linux has `/proc`, DMI/CPUID checks and X11 controls; real device and desktop behavior still need practical testing. Wayland environment blocking is unsupported. Neither platform provides an absolute sandbox against an administrator or external hardware.
 
@@ -116,3 +126,8 @@ Run `./tests/run-core-contracts.ps1` to build the API and create a disposable Po
 `tests/test_core_contract.py` is deliberately restricted to a disposable API on `127.0.0.1:55111`; configure its explicit environment variables. It creates test participants/attempts and must not target a working database. `tests/test_ai_http_contract.py` adds real-model HTTP smoke checks on `127.0.0.1:55112`; blank frames and silence establish wiring, not accuracy.
 
 For labelled local samples, run `python evaluate.py dataset.jsonl --output evaluation-results/report.json` from `Inference/`. The report records confusion counts, false positives/negatives, latency, model/dependency versions and sample/weight hashes. Dataset files are not copied into the report. No accuracy or sub-100-ms capacity claim is established by a startup smoke test.
+
+
+### Linux launcher
+
+Use `bash run.sh --check`, then `bash run.sh` with Docker Compose v2, Bash and Python 3.9+. Production: configure `.env.production` and TLS, then `bash run.sh --production --check` and `bash run.sh --production`. `--status` and `--stop` target the selected environment. See the documentation `/start` page for prerequisites and the separate Linux Qt client boundary.

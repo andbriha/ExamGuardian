@@ -4,18 +4,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GroupService } from '../../../services/group.service';
 import { RouterLink } from '@angular/router';
-import { ExamService } from '../../../services/exam.service';
+import { ExamService, QtiPreview } from '../../../services/exam.service';
 
-interface QuestionOption {
-  text: string;
-}
-
-interface Question {
-  text: string;
-  points: number;
-  correctIndex: number;
-  options: QuestionOption[];
-}
+import { DraftQuestion as Question, QuestionKind, createQuestion, importedQuestion } from './question-types';
 
 interface CreateExamDto {
   title: string;
@@ -40,6 +31,29 @@ interface CreateExamDto {
   styleUrl: './exam-builder.css',
 })
 export class ExamBuilderComponent implements OnInit {
+  qtiPreview: QtiPreview | null = null;
+  importing = false;
+  importError = '';
+  importQti(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0]; input.value = '';
+    this.qtiPreview = null; this.importError = '';
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { this.importError = 'Ліміт файлу — 10 МБ.'; return; }
+    this.importing = true;
+    this.examService.importQti(file).subscribe({
+      next: preview => { this.qtiPreview = preview; this.importing = false; this.cdr.markForCheck(); },
+      error: error => { this.importError = error.error?.message || 'Не вдалося прочитати файл.'; this.importing = false; this.cdr.markForCheck(); }
+    });
+  }
+  applyImport() {
+    if (!this.qtiPreview?.canImport) return;
+    const existing = this.questions.filter(q => q.text.trim() || q.options.some(o => o.text.trim()));
+    if (existing.length + this.qtiPreview.questions.length > 500) { this.importError = 'Максимум 500 запитань в іспиті.'; return; }
+    this.questions = [...existing, ...this.qtiPreview.questions.map(importedQuestion)];
+    this.qtiPreview = null;
+    this.successMsg = 'Запитання додано до чернетки. Перевірте відповіді, бали та розклад перед створенням іспиту.';
+  }
   groups: string[] = [];
   groupsError = false;
   ngOnInit() { this.groupService.getAll().subscribe({next: groups => { this.groups = groups; this.cdr.markForCheck(); }, error: () => { this.groupsError = true; this.cdr.markForCheck(); }}); }
@@ -61,13 +75,8 @@ export class ExamBuilderComponent implements OnInit {
     this.addQuestion(); // починаємо з одного питання
   }
 
-  addQuestion() {
-    this.questions.push({
-      text: '',
-      points: 1,
-      correctIndex: 0,
-      options: [{ text: '' }, { text: '' }, { text: '' }, { text: '' }],
-    });
+  addQuestion(kind: QuestionKind = 'singleChoice') {
+    this.questions.push(createQuestion(kind));
   }
 
   removeQuestion(index: number) {
@@ -76,12 +85,12 @@ export class ExamBuilderComponent implements OnInit {
   }
 
   addOption(q: Question) {
-    if (q.options.length < 6)
+    if (q.kind !== 'trueFalse' && q.options.length < 10)
       q.options.push({ text: '' });
   }
 
   removeOption(q: Question, i: number) {
-    if (q.options.length > 2) {
+    if (q.kind !== 'trueFalse' && q.options.length > 2) {
       q.options.splice(i, 1);
       if (i < q.correctIndex) q.correctIndex--;
       if (q.correctIndex >= q.options.length)

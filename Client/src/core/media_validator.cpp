@@ -70,6 +70,12 @@ void MediaValidator::onVerificationFinished(bool verified, const QString &stage,
         stopVerificationSession();
         qDebug() << "[VALIDATOR] Verification passed successfully!";
         emit progressUpdated("✅ Верифікацію успішно пройдено!");
+#ifdef EXAMGUARDIAN_DEVELOPMENT
+        if (stage == "development" && reason == "identity_skipped") {
+            emit checkResult(true, "DEV: перевірку особи пропущено. Це непідтверджена тестова спроба.");
+            return;
+        }
+#endif
         emit checkResult(true, "Верифікацію пройдено");
         return;
     }

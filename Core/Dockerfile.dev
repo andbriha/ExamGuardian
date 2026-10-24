@@ -3,4 +3,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -r
 WORKDIR /app
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080 DOTNET_USE_POLLING_FILE_WATCHER=1
 # Separate artifacts prevent container builds from overwriting native build outputs.
-ENTRYPOINT ["dotnet", "watch", "--project", "/workspace/Core/Api.csproj", "run", "--no-launch-profile", "--property:UseArtifactsOutput=true", "--property:ArtifactsPath=/build", "--urls", "http://0.0.0.0:8080"]
+ENTRYPOINT ["dotnet", "watch", "--project", "/workspace/Core/Api.csproj", "run", "--no-launch-profile", "--property:EnableDevelopmentTools=true", "--property:UseArtifactsOutput=true", "--property:ArtifactsPath=/build", "--urls", "http://0.0.0.0:8080"]

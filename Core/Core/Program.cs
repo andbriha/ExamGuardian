@@ -27,6 +27,12 @@ public class Program
         if (string.IsNullOrWhiteSpace(builder.Configuration["AiService:ApiKey"])) throw new InvalidOperationException("Configure AiService__ApiKey.");
 
         builder.Services.AddControllers();
+#if EXAMGUARDIAN_DEVELOPMENT
+        builder.Services.AddSingleton<Core.Development.DevelopmentAdmission>();
+#endif
+        builder.Services.AddScoped<Core.Exports.GradeExportService>();
+        builder.Services.AddTransient<Core.Importing.Qti.IQtiItemParser, Core.Importing.Qti.ChoiceItemParser>();
+        builder.Services.AddTransient<Core.Importing.Qti.QtiPackageReader>();
 
         builder.Services.AddCors(options =>
         {

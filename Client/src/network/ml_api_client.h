@@ -32,6 +32,9 @@ signals:
     void violationDetected(const QString &violationType);
 
 private:
+#ifdef EXAMGUARDIAN_DEVELOPMENT
+    void fetchDevelopmentAdmission(quint64 epoch);
+#endif
     QNetworkAccessManager *m_manager;
     QString m_authToken;
     QString m_attemptToken;

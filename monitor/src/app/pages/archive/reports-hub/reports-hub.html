@@ -12,6 +12,34 @@
     <p>{{ errorMessage }}</p>
   </div>
 
+  <app-grade-export />
+  <p *ngIf="reviewLoading" role="status">Оновлення стану спроби…</p>
+  <p *ngIf="reviewError" role="alert">{{ reviewError }}</p>
+  @if (review; as session) {
+    <section class="workflow-panel" aria-labelledby="review-heading">
+      <h3 id="review-heading">Рішення викладача · {{ session.studentName }} · спроба #{{ session.id }}</h3>
+      <p>{{ session.examTitle }} · Академічний бал: {{ session.scoreCalculated ? session.score + '/100' : 'Не розраховано' }}</p>
+      <p *ngIf="session.identityVerificationSkipped" role="status">DEV: перевірку особи пропущено. Тестова спроба не підлягає підтвердженню та експорту.</p>
+      <p>Поточний висновок: {{ verdictLabel(session.integrityVerdict) }}. Рішення не змінює бал за відповіді.</p>
+      <ul><li>Докази: {{ evidenceLabel(session.evidenceStatus) }}</li><li>Очікують перевірки: {{ session.pendingObservationCount ?? 0 }}</li><li>Підтверджені сигнали: {{ session.confirmedObservationCount ?? 0 }}</li></ul>
+      <a [routerLink]="['/monitor', session.examId]" [queryParams]="{session: session.id}">Переглянути записи та перевірити сигнали</a>
+      <button type="button" [disabled]="reviewSaving" (click)="openReview(session.id.toString())">Оновити стан спроби</button>
+      <label for="review-verdict">Висновок</label>
+      <select id="review-verdict" [(ngModel)]="reviewVerdict" [disabled]="reviewSaving">
+        <option value="Accepted">Прийнято після перевірки</option><option value="Rejected">Добросовісність не підтверджено</option><option value="Inconclusive">Недостатньо доказів</option>
+      </select>
+      <p *ngIf="reviewBlock(reviewVerdict)" role="status">{{ reviewBlock(reviewVerdict) }}</p>
+      <label for="review-notes">Обґрунтування для протоколу та апеляції (обов’язково)</label>
+      <textarea id="review-notes" [(ngModel)]="reviewNotes" maxlength="2000" rows="4" [disabled]="reviewSaving"></textarea>
+      <small>{{ reviewNotes.length }}/2000. Пізні докази можуть повернути спробу на перевірку.</small>
+      <button type="button" (click)="saveReview()" [disabled]="reviewSaving || !!reviewBlock(reviewVerdict) || !reviewNotes.trim()">{{ reviewSaving ? 'Збереження…' : 'Зберегти рішення' }}</button>
+      <button type="button" (click)="review = null" [disabled]="reviewSaving">Закрити</button>
+      <details><summary>Історія рішень ({{ reviewHistory.length }})</summary>
+        @for (entry of reviewHistory; track $index) { <p>{{ entry.at | date:'medium' }} · {{ verdictLabel(entry.verdict) }} · {{ entry.reviewerId }}<br>{{ entry.notes }}</p> }
+      </details>
+    </section>
+  }
+  <button type="button" (click)="loadReports()" [disabled]="isLoading">Оновити архів</button>
   <div class="grid" *ngIf="!isLoading && !errorMessage">
     @for (exam of completedExams; track exam.id) {
       <div class="report-card" [class.card-aborted]="exam.status === 'aborted'">
@@ -22,6 +50,7 @@
           <span class="date">{{ exam.date }}</span>
         </div>
         
+        <p *ngIf="exam.identityVerificationSkipped">DEV · Перевірку особи пропущено</p>
         <h3 class="title">{{ exam.title }}</h3>
         <p class="group"><strong>{{ exam.groupName }}</strong></p>
         
@@ -41,9 +70,7 @@
         <a [routerLink]="['/monitor', exam.examId]" [queryParams]="{session: exam.id}">Матеріали та сигнали сесії</a>
         <p>{{ verdictLabel(exam.integrityVerdict) }}</p>
         <p *ngIf="exam.integrityNotes">{{ exam.integrityNotes }}</p>
-        <button (click)="reviewReport(exam.id, 'Accepted')">Прийняти після перевірки</button>
-        <button (click)="reviewReport(exam.id, 'Rejected')">Не підтвердити добросовісність</button>
-        <button (click)="reviewReport(exam.id, 'Inconclusive')">Доказів недостатньо</button>
+        <button type="button" [disabled]="reviewLoading || reviewSaving" (click)="openReview(exam.id)">Перевірити та ухвалити рішення</button>
         <button class="btn-pdf" (click)="downloadReport(exam.id)">
           📄 Сформувати / Друк звіту
         </button>

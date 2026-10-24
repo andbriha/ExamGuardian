@@ -4,8 +4,8 @@
 DevelopmentViewModel *DevelopmentViewModel::current=nullptr;
 DevelopmentViewModel::DevelopmentViewModel(QObject *parent):QObject(parent) {
     current=this;
-    m_controls={"vmGate","processGate","displayGate","virtualDeviceGate","keyboardHooks","focusEnforcement"};
-    m_status="Local development controls. Identity verification, recording and AI use the normal system.";
+    m_controls={"vmGate","processGate","displayGate","virtualDeviceGate","keyboardHooks","focusEnforcement","biometricAdmission"};
+    m_status="Development controls. Identity bypass needs DEV server permission; recording and monitoring remain active.";
 }
 void DevelopmentViewModel::authenticate(const QString &) {
     m_status="Server: "+clientServerUrl()+" — normal authentication and exam workflow.";

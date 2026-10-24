@@ -3,6 +3,7 @@ import os
 import unittest
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 ORIGIN = os.environ.get('EXAMGUARDIAN_TEST_DEV_URL', '')
@@ -15,6 +16,27 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 @unittest.skipUnless(ORIGIN == 'http://127.0.0.1:8081', 'Requires the explicit development origin')
 class DevelopmentRouting(unittest.TestCase):
+    def test_downloads_serve_published_dev_artifacts(self):
+        landing = Path(__file__).resolve().parents[1] / 'Landing'
+        for url_name, filename in (
+            ('Online_Proctoring_System_Setup.exe', 'ExamGuardian_Setup_Dev.exe'),
+            ('Online_Proctoring_System_Client.exe', 'ExamGuardian_Client_Dev.exe'),
+            ('Online_Proctoring_System_Client.zip', 'ExamGuardian_Client_Dev.zip'),
+        ):
+            with self.subTest(filename=filename):
+                request = urllib.request.Request(ORIGIN + '/landing/' + url_name, method='HEAD')
+                with urllib.request.urlopen(request, timeout=15) as response:
+                    self.assertEqual(int(response.headers['Content-Length']), (landing / filename).stat().st_size)
+                    self.assertEqual(response.headers['Content-Disposition'], f'attachment; filename="{filename}"')
+                    self.assertEqual(response.headers['Cache-Control'], 'no-store')
+
+    def test_wrong_flavor_and_missing_downloads_are_not_html(self):
+        for filename in ('ExamGuardian_Setup_Prod.exe', 'ExamGuardian_Client_Prod.zip', 'missing.exe', 'missing.zip'):
+            with self.subTest(filename=filename):
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    urllib.request.urlopen(ORIGIN + '/landing/' + filename, timeout=15)
+                self.assertEqual(caught.exception.code, 404)
+
     def test_root_redirect_preserves_external_port(self):
         opener = urllib.request.build_opener(NoRedirect)
         with self.assertRaises(urllib.error.HTTPError) as caught:

@@ -36,12 +36,12 @@ Item {
                 width: parent.width
                 Label {text:"DEV controls"; font.bold:true;font.pixelSize:20}
                 Label {text:DevVM.status;wrapMode:Text.WordWrap;Layout.fillWidth:true}
-                Label {text:"These switches only disable local client restrictions. Login, identity verification, recording and AI remain unchanged.";wrapMode:Text.WordWrap;Layout.fillWidth:true}
+                Label {text:"Identity bypass requires a DEV server and marks the attempt as unverified. Login, recording and monitoring remain active.";wrapMode:Text.WordWrap;Layout.fillWidth:true}
                 Repeater {
                     model: DevVM.controls
                     CheckBox {
                         required property string modelData
-                        text: ({vmGate: "Disable VM check", processGate: "Disable process blocking", displayGate: "Disable display check", virtualDeviceGate: "Disable virtual device check", keyboardHooks: "Disable keyboard restrictions", focusEnforcement: "Disable focus restrictions"})[modelData]
+                        text: ({vmGate: "Disable VM check", processGate: "Disable process blocking", displayGate: "Disable display check", virtualDeviceGate: "Disable virtual device check", keyboardHooks: "Disable keyboard restrictions", focusEnforcement: "Disable focus restrictions", biometricAdmission: "Skip AI identity and liveness verification (DEV only)"})[modelData]
                         checked: DevVM.active.indexOf(modelData)>=0
                         enabled: DevVM.available && !DevVM.frozen
                         onClicked: DevVM.setOverride(modelData,checked)

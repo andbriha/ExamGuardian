@@ -54,10 +54,17 @@ The isolated Compose environments and launcher are implemented. `./run.ps1` sele
 
 Development runs Core watch, AI reload, Angular live updates and an Astro container. Qt is native. On this workstation the application origin is `http://127.0.0.1:8081`; the documentation container uses port 4323 because 4321/4322 already host existing documentation servers. Newly initialized installations select an available docs port and store it in `.env.dev`.
 
-The DEV client menu is local and opens before login. It disables selected local restrictions only; identity admission, recording, AI, exams and reports remain ordinary. The API and panel have no synthetic attempt workflow. Automated fixtures previously left in the working dev database were removed after a backup, preserving the user's student and examiner accounts. Further mutation tests use disposable databases only.
+The DEV client menu is local and opens before login. It disables selected local restrictions and offers an optional server-authorized DEV identity bypass. Recording and ongoing monitoring remain ordinary. Bypassed attempts are visibly marked and excluded from approval/export; production artifacts omit the bypass endpoint. Automated fixtures previously left in the working dev database were removed after a backup, preserving the user's student and examiner accounts. Further mutation tests use disposable databases only.
 
 The landing is shared with production; a development file mount serves the DEV installer at the common download URL. Production deployment still requires configured HTTPS and `.env.production`. Physical-device and classroom-load validation remain outstanding.
 
 Examination availability is the absolute interval from the scheduled UTC start (inclusive) to start plus duration (exclusive). A late arrival keeps that same end time. After it, no start/resume or answer change is accepted. Creation converts an explicit local time and IANA timezone on the server; ambiguous/missing DST times are rejected. The panel uses the server clock and refreshes scheduled/active/completed state.
 
 Head direction is anatomical: left/right refer to the student, not the observer looking at an unmirrored image. Recording delivery keeps independent attempt queues: a deleted attempt or permanent rejection cannot block a newer attempt. Existing real files can be retried and are removed locally only after a matching hash acknowledgement.
+
+
+## Teacher decisions and interchange
+
+The archive exposes the evidence/observation prerequisites, a reasoned decision form and review history. Server checks remain authoritative. Examiner-only `GET /api/grade-exports` lists groups, eligible exams and exclusion reasons. `GET /api/exams/{examId}/grades?group=...` requires a selected group (empty means ungrouped) and exports the latest eligible Accepted attempt per student as UTF-8 CSV (`username,grade`); ownership is enforced. Moodle mapping and the distinction from automatic synchronization are described in the [organizer guide](/guide#6-export-approved-grades-to-moodle).
+
+Examiner-only `POST /api/exams/import-qti` accepts multipart field `file`, validates XML/ZIP and returns a preview (`questions`, `issues`, `canImport`, `notice`) without creating an exam. The builder adds a fully supported package to the draft. Supported QTI 2.1/2.2 single-choice text items use standard match_correct scoring. Unsupported content, partial credit and custom processing are reported explicitly; the importer is not a general QTI engine. See [import limits](/guide#7-import-existing-qti-questions).

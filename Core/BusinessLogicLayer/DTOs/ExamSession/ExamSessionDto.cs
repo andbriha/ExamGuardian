@@ -8,6 +8,7 @@ public class ExamSessionDto
     [JsonIgnore] public string? EvidenceClientId { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? AttemptToken { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? EvidenceToken { get; set; }
+    public bool IdentityVerificationSkipped { get; set; }
     public Guid StudentId { get; set; }
     public string StudentName { get; set; } = null!;
     public int ExamId { get; set; }

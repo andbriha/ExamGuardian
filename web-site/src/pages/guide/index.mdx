@@ -38,7 +38,7 @@ The attempt captures the exam definition and policy at start. Do not expect late
 
 1. Launch the native client and select the application origin. Use HTTPS for production.
 2. Sign in, review the recording/privacy information, and prepare the camera and microphone.
-3. Close prohibited applications and resolve environment checks. A DEV override is a local development tool, not a production admission procedure.
+3. Close prohibited applications and resolve environment checks. DEV overrides are development tools, not production admission procedures. The optional identity bypass creates a marked test attempt that cannot be approved or exported.
 4. The client lists upcoming and currently available exams and refreshes every five seconds. Check the displayed start/end time (in the device timezone), select an available exam, and complete the identity and timed pose challenge. Upcoming exams are visible but cannot be started early.
 5. Begin the attempt after admission. Core controls the deadline; the client saves answers and records camera/screen evidence.
 
@@ -70,6 +70,48 @@ Confirm or dismiss observations after reviewing context. The review rules requir
 
 Delivered describes file/time coverage; it does not guarantee a useful camera image. Late recordings or observations can return an attempt to review without changing its academic score.
 
-Print the report through the browser when needed. The current report is printable HTML, not an immutable signed PDF or LMS export.
+Open **Archive & Reports → Review and decide** for the selected attempt. The form loads its current evidence state, pending/confirmed observation counts and decision history. Follow the materials link to review recordings and dismiss or confirm signals. Refresh the attempt before saving, choose a verdict and provide a reason (up to 2,000 characters). The server rechecks eligibility when saving; a conflict preserves your entered reason. Review history records the reviewer ID and time.
+
+Print the report through the browser when needed. The report is printable HTML, not an immutable signed PDF.
+
+## 6. Export approved grades to Moodle
+
+In **Archive & Reports → Export grades**, choose a student group first. Only exams with at least one exportable grade appear; each shows its ID, date, eligible count and excluded count. Download CSV from that exam card. An empty group view explains why results are unavailable. Refresh availability after reviewing attempts. Group membership is the student’s current group, not a historical group snapshot. The file contains `username,grade` in UTF-8, comma-separated, with scores on a 0–100 scale.
+
+Only the latest attempt per student is considered. It must be finished with a calculated result, Accepted, have delivered evidence (or media expired under the retention policy after review) and no undismissed observations. A newer pending or rejected attempt excludes that student; an older approved score is not substituted. An empty eligible set produces an explanation instead of an empty file. New evidence can invalidate eligibility after download, so regenerate the file immediately before importing it.
+
+In Moodle, open the course gradebook, choose **Import → CSV**, select UTF-8 and comma as the separator, and map `username` to the matching Moodle username and `grade` to the intended grade item (maximum 100). Usernames must match in both systems; the export does not create Moodle users or enrollments. Check Moodle’s preview before completing the import. Importing grades can override existing activity grades. See [Moodle grade import](https://docs.moodle.org/502/en/Grade_import).
+
+This is a downloadable CSV workflow, not automatic Moodle synchronization. Other systems can consume the same two columns if they support identifier/grade mapping. Attempts with formula-like or control-character logins are excluded with an explanation rather than silently changing identifiers.
+
+## 7. Import existing QTI questions
+
+In **Create exam → Import ready-made questions**, select a standalone XML item or ZIP content package (up to 10 MB). Preview the questions and correct answers, resolve every reported issue, then add the questions to the draft. Existing authored questions are preserved. Nothing is published until you complete the schedule and save the exam.
+
+Supported subset: **QTI 2.1/2.2**, textual `assessmentItem`, one `choiceInteraction`, 2–10 choices, one correct identifier, and the standard `match_correct` response-processing template (one point per question). The imported answer index is derived from choice identifiers, not their names or positions. Basic text formatting is flattened; choice order is preserved rather than shuffled.
+
+ZIP packages need a root `imsmanifest.xml` with QTI item resources. Resources are read in manifest order as a question bank; test sections, selection rules, timing and test-level scoring are not imported. Set the exam’s policy and schedule in the builder. Limits: 500 questions, 1,000 ZIP entries, 25 MB uncompressed and 2 MB XML characters per document. Files are read in memory; DTDs, external entities and unsafe paths are rejected.
+
+QTI 1.2/3.0, multiple-response questions, partial credit, custom scoring, adaptive/template questions, media and mathematical markup are unsupported. An unsupported item blocks the package instead of being silently omitted. A runnable sample is `tests/fixtures/qti-single-choice.xml` in the repository. The scope follows the [QTI 2.1 implementation guide](https://www.imsglobal.org/question/qtiv2p1/imsqti_implv2p1.html); this is not a claim of full QTI conformance.
 
 **Complete when:** the academic result, evidence state, and examiner verdict are understood and recorded. For exact behavior and testing boundaries, see [Current behavior & validation](/docs/11-current-contract).
+
+
+### QTI support matrix
+
+| Feature | Current support |
+|---|---|
+| QTI versions | 2.1 and 2.2; 1.2 and 3.0 rejected |
+| Single answer | Textual choiceInteraction, maxChoices=1, 2–10 options |
+| True / false | Two-choice QTI items using identifiers; builder also has **Правда / Неправда** |
+| Scoring | Standard match_correct, 1 imported point; exam builder can change points |
+| Partial credit / multiple answers | Unsupported |
+| Free text, matching, ordering | Unsupported |
+| Media, MathML, adaptive items | Unsupported; reported, not silently removed |
+| Packaging | Standalone item XML or ZIP with imsmanifest.xml; preview before applying |
+| Test-level rules | Not imported; assign scheduling and policy in the builder |
+| Formatting / shuffle | Basic formatting becomes plain text; options keep source order |
+
+True/false is stored and scored through the existing two-option answer contract, so both the native Qt client and server use the same grading path. The builder locks the two answer labels; the teacher selects the correct one. QTI fixtures: `tests/fixtures/qti-single-choice.xml` and `tests/fixtures/qti-true-false.xml`.
+
+Implementation is separated into a package reader, an `IQtiItemParser` interface and a choice-item parser. New interactions can add a parser without embedding archive handling in controllers. Export eligibility and CSV serialization live in a service shared by catalog and download; the group-driven export UI has its own Angular component.
