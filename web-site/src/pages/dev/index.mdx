@@ -1,0 +1,50 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "Architecture overview"
+---
+
+import Mermaid from '../../components/Mermaid.astro';
+
+# Architecture overview
+
+ExamGuardian separates exam authority, media analysis, and human review. Nginx provides one application origin; the native client runs on the student's machine. Use [the launch guide](/start) for commands and [the current contract](/docs/11-current-contract) for implementation limits.
+
+## Connections and ownership
+
+<Mermaid source={"flowchart LR\n  Qt[Qt student client] -->|Answers and recordings| N[Nginx application origin]\n  Qt -->|Frames and audio samples| N\n  Panel[Angular examiner panel] -->|REST polling and review| N\n  N -->|/api/| Core[Core API]\n  N -->|/verify/ and /analyze/| AI[FastAPI analysis]\n  AI -->|Validate attempt and deliver observations| Core\n  Core --> DB[(PostgreSQL)]\n  Core --> Media[(Recording and image storage)]\n  AI --> State[(SQLite outbox and challenge state)]"} />
+
+| Component | Owns | Read more |
+|---|---|---|
+| Qt client | Device/environment checks, student UI, local answer copy, capture, durable upload queues | [Client internals](/docs/03-qt-client) |
+| Core API | Accounts, admission, frozen exam definition, deadline, answers, score, evidence authorization, review history | [Core API & data](/docs/04-core-api) |
+| AI service | Identity/pose checks, face/object observations, speech activity, durable observation delivery | [AI engine](/docs/05-ai-engine) |
+| Angular panel | Examiner workflow, periodic refresh, preview/playback, review and printable report | [Examiner panel](/docs/06-angular-monitor) |
+| Nginx & portal | Public routing and native installer distribution | [Student portal](/docs/07-student-portal) |
+
+Core is the authority for attempts. AI validates active attempts with Core; it does not decide the academic score or integrity verdict. The examiner makes the integrity decision.
+
+## Follow an attempt
+
+1. The examiner creates accounts, reference photos, an exam, and its policy.
+2. The client requests an identity/pose challenge. Successful verification allows signed admission.
+3. Core freezes the exam definition and controls timing. The client submits answers and captures camera/screen clips; AI receives frames/audio through Nginx.
+4. AI observations reach Core through a durable outbox. The examiner panel polls Core and loads authorized previews and recordings.
+5. Submission finalizes the academic result. Evidence can continue arriving; the examiner reviews it separately.
+
+[Runtime sequences](/docs/08-runtime-view) explain the detailed transitions. Resume preserves the original deadline, and late evidence can reopen review without changing the score.
+
+## Data survives at different layers
+
+PostgreSQL stores accounts, exam definitions, attempts, answers, and decisions. Server volumes store media and images. AI SQLite state supports challenges and observation retries. The native client keeps pending answers and uploads on disk so delivery can resume after interruptions.
+
+A database dump alone is therefore not a complete evidence backup. See [deployment and storage](/docs/09-deployment-view) and the [backup limitation in the launch guide](/start#existing-data-and-backups).
+
+## Development and production
+
+Both profiles run the same examination logic with separate Compose projects, settings, keys, and volumes. Development adds source reload, documentation, and local client overrides. Production uses HTTPS and a client artifact without override resources. The launcher builds production services from the selected checkout; it does not implement a versioned image promotion pipeline.
+
+## Boundaries to keep in mind
+
+The panel uses REST polling, not SignalR/WebSocket video. AI models share a bounded analysis slot; horizontal scaling and classroom capacity are not established by startup tests. OS checks are not an absolute sandbox, and automated observations do not establish cheating.
+
+Read [current implementation & validation](/docs/11-current-contract) before treating design chapters or the [roadmap](/docs/10-system-improvements) as delivered behavior.

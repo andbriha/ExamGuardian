@@ -1,0 +1,15 @@
+---
+import DocsLayout from '../../layouts/DocsLayout.astro'
+import { sections } from '../../data/navigation'
+---
+<DocsLayout title="Documentation map">
+<p class="eyebrow">Find the right page</p><h1>Documentation map</h1>
+<p>Start with a task, then use the component chapters for detail. Launch instructions describe commands; the organizer guide describes the exam workflow; architecture pages explain responsibilities and data flow.</p>
+<blockquote><p><a href="/docs/11-current-contract">Current behavior &amp; validation</a> records implementation boundaries. The roadmap describes future work, and older design chapters are not evidence that every proposed capability has shipped.</p></blockquote>
+<h2>Suggested reading paths</h2><ul>
+<li><strong>Developer:</strong> <a href="/start#development">Development launch</a> → <a href="/dev">architecture overview</a> → component reference.</li>
+<li><strong>Administrator:</strong> <a href="/start#production">Production launch</a> → <a href="/docs/09-deployment-view">deployment and storage</a> → validation limits.</li>
+<li><strong>Examiner:</strong> <a href="/guide">Run an exam</a> → <a href="/docs/11-current-contract">attempt and review rules</a>.</li>
+</ul>
+{sections.map(section => <section><h2>{section.title}</h2><ul>{section.items.filter(item => item.href !== '/docs').map(item => <li><a href={item.href}>{item.title}</a></li>)}</ul></section>)}
+</DocsLayout>

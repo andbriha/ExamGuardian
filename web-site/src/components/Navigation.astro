@@ -1,0 +1,8 @@
+---
+const pathname = Astro.url.pathname.replace(/\/$/, '') || '/'
+const links = [ ['/', 'Overview'], ['/start', 'Launch'], ['/guide', 'Run an exam'], ['/dev', 'Architecture'], ['/docs', 'Documentation'] ]
+---
+<header class="site-header">
+<a class="site-brand" href="/">ExamGuardian <span> / docs</span></a>
+<nav aria-label="Main navigation">{links.map(([href, label]) => <a href={href} aria-current={(href === '/docs' ? pathname.startsWith('/docs') : pathname === href) ? 'page' : undefined}>{label}</a>)}</nav>
+</header>

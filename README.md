@@ -1,2 +1,150 @@
 # ExamGuardian
-ExamGuardian is a secure online examination system designed to monitor candidates through screen capture, webcam streaming, system activity tracking, and behavior analysis. It prevents window switching, detects suspicious actions, and streams all exam data to a remote server for real-time review by examiners.
+
+Self-hosted exam attempts with identity checks, saved answers, camera/screen evidence and human review. The academic score is calculated from answers; the integrity verdict is a separate examiner decision.
+
+This is a pilot implementation. Model accuracy, resistance to recorded-video attacks, device compatibility and classroom-scale capacity require measured validation.
+
+## Components and authority
+
+- **Qt 6.10 / C++:** student login, exam selection, environment checks, camera/screen recording, microphone analysis and persistent delivery queues.
+- **ASP.NET Core 10 / PostgreSQL 16:** owner checks, signed admission and attempt capabilities, frozen questions, deadlines, answers, scores, evidence storage and review history.
+- **FastAPI:** identity matching, pose challenge, periodic identity checks, face/object observations and speech activity. Models share one bounded analysis slot. A SQLite outbox retries event delivery.
+- **Angular:** examiner monitoring by REST polling, authorized preview images, camera/screen playback and review.
+- **Nginx:** one origin for `/api/`, `/verify/`, `/analyze/`, panel and student portal. Qt sends images/audio through this origin directly to AI; AI validates the active attempt with Core.
+
+An observation is a reason to inspect context, not a calibrated probability of cheating. The system does not implement SignalR/WebSocket video, automatic integrity scoring, micro-earpiece recognition, speaker attribution, immutable PDF signing or LMS/CSV export. The printable report uses the browser print dialog.
+
+Security changes and deployment requirements: [SECURITY_HARDENING_2026-11-14.md](SECURITY_HARDENING_2026-11-14.md).
+
+## Documentation
+
+The documentation site separates system overview (`/`), launch instructions (`/start`), examiner workflow (`/guide`), architecture (`/dev`), and a reference map (`/docs`). Start development below to serve it locally. Source: [web-site/README.md](web-site/README.md).
+
+## Development and production
+
+```powershell
+./run.ps1                 # isolated development, reload and Astro documentation
+./run.ps1 --check         # validate configuration without changing containers
+./run.ps1 --status
+./run.ps1 --stop          # preserve development volumes
+./run.ps1 --production    # explicit production configuration and HTTPS certificate required
+./scripts/Start-Client.ps1
+```
+
+Development initializes `.env.dev` with independent random secrets; examiner credentials are stored there. The application defaults to `http://127.0.0.1:8081`. The docs port is selected on first initialization (starting at 4321) and printed at launch. Copy `.env.production.example` to `.env.production` and replace all placeholders before selecting production. The production alias `--prod` is supported. Production failures never launch development instead.
+
+The native DEV client opens local controls at startup (`Ctrl+Shift+D` reopens them). Switches disable VM/process/display/virtual-device checks, keyboard restrictions or focus restrictions. Identity verification, recording, AI, API, panel and examination data use the same code as production. No sample data is seeded. The landing is shared; only the served installer differs. Production compilation removes the local controls; `Client/build-release.ps1` defaults to production. Use `-Flavor development` for the DEV installer.
+
+The existing root `docker-compose.yml` and `.env` remain a legacy installation path. They are not the new dev/prod profiles and are preserved for deliberate migration.
+
+## Legacy local environment
+
+Run from the repository root with Docker Compose and PowerShell:
+
+```powershell
+./scripts/Initialize-Development.ps1
+docker compose up -d --build
+docker compose ps
+```
+
+The initializer generates random secrets and first examiner credentials in `.env`, and preserves an existing `.env`. Read that file locally to sign in. For an existing installation, change published/default credentials and keys deliberately before external deployment. Database migrations are tracked and applied on startup; preserve a checkpoint before upgrading an existing database.
+
+- Student portal: `http://localhost/landing/`
+- Examiner panel: `http://localhost/login`
+- AI development docs: `http://127.0.0.1:8000/docs` (loopback only).
+
+Create students, enroll a JPEG reference photograph, then create an exam with group, scheduled start, duration, attempt limit, passing score and permitted speech/objects. The student selects an exam and completes a fresh identity/pose challenge. Resume does not reset the original deadline.
+
+## Client build
+
+Install Qt 6.10.1 MinGW, matching compiler, CMake and Ninja. Build a fresh release from source:
+
+```powershell
+./Client/build-release.ps1 -Flavor development -PublishToLanding
+./Client/build-release.ps1 -Flavor production -PublishToLanding
+# Build a separate release without updating portal downloads:
+./Client/build-release.ps1 -Flavor production
+```
+
+`scripts/Start-Client.ps1` configures and rebuilds the Qt client before launching it; add `-Production` for the production flavor. `run.ps1` builds/starts the Docker services; it does not compile the native Qt application.
+
+`Client/build-release.ps1` produces a release under `Client/releases/` with bundled Qt libraries, a portable ZIP, source hashes and a startup check. `-PublishToLanding` also builds the installer (Inno Setup 6 is discovered automatically, or pass `-InnoCompiler`) and copies verified artifacts into the shared `Landing/` directory:
+
+- `ExamGuardian_Setup_Dev.exe` / `ExamGuardian_Setup_Prod.exe`: complete installers.
+- `ExamGuardian_Client_Dev.zip` / `ExamGuardian_Client_Prod.zip`: portable clients including Qt libraries; extract the entire archive before running its EXE.
+- `release-manifest_Dev.json` / `release-manifest_Prod.json`: build identity and SHA-256 hashes.
+
+`Landing.dev` is no longer used. Both environments mount `Landing/`; Nginx selects the matching flavor for the common download URLs and sends the suffixed filename to the browser. Production refuses direct DEV downloads, and development refuses direct PROD downloads. Missing packages return 404. Each flavor is published independently. The login screen configures the server origin; `EXAMGUARDIAN_URL` overrides it.
+
+Portable downloads are always ZIP packages, never a bare Qt executable. Extract the entire ZIP and run `Online_Proctoring_System_Client.exe` beside its DLLs. Legacy client EXE download URLs redirect to the matching ZIP. Release builds verify the extracted ZIP with Qt and QML developer paths removed from the environment; `Client/test-portable.ps1 -ArchivePath <zip> -Flavor development` repeats this check independently.
+
+Windows and Linux builds, headless QML startup and persistent upload-queue tests pass. Windows Qt login/admission/autosave/submission was checked against the disposable Core API. Linux has `/proc`, DMI/CPUID checks and X11 controls; real device and desktop behavior still need practical testing. Wayland environment blocking is unsupported. Neither platform provides an absolute sandbox against an administrator or external hardware.
+
+## TLS
+
+For a reachable institutional deployment, configure `.env` with `ASPNETCORE_ENVIRONMENT=Production`, `TLS_DIRECTORY` containing `fullchain.pem` and `privkey.pem`, and a valid host certificate. Then:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
+```
+
+The TLS overlay redirects HTTP to HTTPS and adds the HTTPS port. Use an HTTPS origin in the student client. Refresh cookies are Secure outside Development.
+
+## Evidence and recovery
+
+Answers have a server autosave and a local pending copy. Camera and screen clips have immutable indices, verified MP4 tracks, actual durations, SHA-256 acknowledgements and a disk queue. Interrupted clips that cannot be decoded remain available for inspection; they do not become successful uploads. Delivery authorization lasts seven days; reopening the client with the same account and origin resumes queued deliveries during that period.
+
+The final evidence manifest distinguishes Delivered, Partial, Pending and Unknown. Delivered refers to file/time coverage, not proof of useful picture quality. Accepted integrity decisions require complete delivered evidence and dismissed observations. Rejected decisions require a confirmed observation. Inconclusive records insufficient evidence. New late observations or newly received media return the attempt to review without changing its academic score.
+
+## Backup, restore and retention
+
+The following scripts use the **legacy default Compose project**. They do not select the new dev/production profiles automatically; do not assume they protect those environments unchanged. A profile-aware procedure must explicitly select the project, configuration, and database identifiers.
+
+For the legacy installation, use a quiet checkpoint after active attempts and pending deliveries drain:
+
+```powershell
+./scripts/Backup.ps1 -Destination ./backups/checkpoint-01
+./scripts/Restore-Checkpoint.ps1 -BackupDirectory ./backups/checkpoint-01 -Destination ./restored/checkpoint-01
+```
+
+The backup includes PostgreSQL, camera/screen files, photos/evidence, credential encryption keys and online SQLite snapshots with checksums. The API stores its key ring in the persistent `credential_keys` volume (`CredentialKeysPath`); back it up together with the database. Without these keys issued passwords cannot be recovered. Native runs use `Core/Core/state/credential-keys`; do not commit or publish this directory. Restore validates checksums and restores into a new isolated PostgreSQL container; it preserves the existing installation. Verify restored records/media before switching any deployment to it.
+
+Retention is disabled by default. The administrator must set `Retention__Days` (at least seven). Preview first with `dotnet Api.dll --retention-preview`; use `--retention-apply` only after reviewing the plan and preserving a backup. Commands run in the API storage environment with its database configuration. Only finished, already reviewed attempts older than the policy are eligible. Media expires; scores, answers, timing/hash sidecars and review history remain. Reference photographs have a separate enrollment lifecycle and are not removed by this command.
+
+## Verification
+
+```powershell
+dotnet build Core/Core.sln --configuration Release
+npm.cmd --prefix monitor ci
+npm.cmd --prefix monitor run build
+npm.cmd --prefix monitor test -- --watch=false --browsers=ChromeHeadless
+```
+
+`Inference/tests` exercises authentication, challenge transitions, durable delivery and evaluation metrics without downloading models. Install `Inference/requirements-test.txt` and run `python -m unittest discover -s tests -v` from `Inference/`.
+
+Run `./tests/run-core-contracts.ps1` to build the API and create a disposable PostgreSQL environment, apply migrations, verify Core/retention contracts, and clean up its containers. Pass `-PythonExecutable` when Python is not on PATH.
+
+`tests/test_native_contract.py` checks the native Qt wire protocol when `EXAMGUARDIAN_NATIVE_CLIENT` points to the `native_core_contract` target built with `EXAMGUARDIAN_BUILD_TESTS=ON`.
+
+`tests/test_core_contract.py` is deliberately restricted to a disposable API on `127.0.0.1:55111`; configure its explicit environment variables. It creates test participants/attempts and must not target a working database. `tests/test_ai_http_contract.py` adds real-model HTTP smoke checks on `127.0.0.1:55112`; blank frames and silence establish wiring, not accuracy.
+
+For labelled local samples, run `python evaluate.py dataset.jsonl --output evaluation-results/report.json` from `Inference/`. The report records confusion counts, false positives/negatives, latency, model/dependency versions and sample/weight hashes. Dataset files are not copied into the report. No accuracy or sub-100-ms capacity claim is established by a startup smoke test.
+
+
+### Linux launcher
+
+Use `bash run.sh --check`, then `bash run.sh` with Docker Compose v2, Bash and Python 3.9+. Production: configure `.env.production` and TLS, then `bash run.sh --production --check` and `bash run.sh --production`. `--status` and `--stop` target the selected environment. See the documentation `/start` page for prerequisites and the separate Linux Qt client boundary.
+
+### Credentials and group reports
+
+In **Students → Add from list** select a group and paste a list from Excel/Google Sheets or upload CSV UTF-8, TSV or TXT (up to 200 students and 200 KB). Full names are required; usernames are optional. A template and preview are available on the page. Errors block the entire import; existing students with matching data are skipped without changing passwords. Use distinct usernames for students with the same name.
+
+In **Academic groups → Student credentials** you can download the PDF again with usernames and system-issued passwords without changing them, or a CSV with usernames only. Passwords for newly imported accounts are stored encrypted separately from BCrypt hashes. Old accounts and passwords changed by users are marked as Not saved. After explicit confirmation, **Issue passwords** replaces passwords for the entire group and generates a PDF. Active attempts or a changed group roster block reissue. Give each student only their own row. Refresh tokens are reset on reissue; previously issued access tokens remain valid until expiration.
+
+In the report for the selected group and exam **Student results → Prepare group PDF** shows a preview, after which you can download the PDF. It includes all current students in the group, approved grades, total points and a breakdown by question category. Unapproved results show a status without a grade. The latest attempt is used without substituting an older one. Questions, answers, passwords and observation evidence are excluded from this document. This is a student report separate from the Moodle CSV.
+
+The report category is set for each question in the builder. Points are summed from question results frozen in the attempt; later exam changes do not affect them. A name such as Listening or Matching does not add a question type: these interactions are not yet implemented. Older attempts default to Test questions; a breakdown is unavailable without a snapshot.
+
+In **Archive and reports** first select a group, then an exam (title, ID and date). The report shows the current roster, including students without attempts, each student’s latest attempt, academic score and a separate teacher verdict. Retakes are available in each row’s history. Search and the pending-decision filter affect only the table view; CSV exports always include the entire group. This working report includes unapproved and DEV results; Moodle CSV below includes only results that meet export rules. Moving a student to another group changes their placement in reports: historical group membership is not yet recorded.
+
+Unavailable verdicts are disabled in the decision form with an explanation. A DEV attempt with skipped identity verification can be marked as Insufficient evidence but cannot be approved for export. After a decision, the report and Moodle export availability are updated.

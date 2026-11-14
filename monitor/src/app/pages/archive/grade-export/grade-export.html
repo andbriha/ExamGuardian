@@ -1,0 +1,22 @@
+<section aria-labelledby="export-heading">
+  <div class="heading"><div><h3 id="export-heading">Експорт оцінок</h3><p>Moodle / CSV · остання підтверджена спроба кожного студента</p></div>
+  <button type="button" (click)="refresh()" [disabled]="loading || downloading !== null">Оновити доступність</button></div>
+  <label for="export-group">Група студентів</label>
+  <select id="export-group" [(ngModel)]="selectedGroup" (ngModelChange)="selectGroup()" [disabled]="loading || downloading !== null">
+    <option [ngValue]="null">Спочатку оберіть групу</option>
+    @for (group of groups; track group.group) { <option [ngValue]="group.group">{{ group.group || 'Без групи' }} · {{ group.exams.length }} доступних іспитів</option> }
+  </select>
+  <p *ngIf="loading" role="status">Перевіряємо останні спроби та рішення викладача…</p>
+  <p *ngIf="error" role="alert" class="error">{{ error }}</p><p *ngIf="success" role="status">{{ success }}</p>
+  @if (!loading && groups.length === 0 && !error) { <p>Ще немає спроб для експорту. Після завершення іспиту перевірте докази та збережіть рішення «Прийнято».</p> }
+  @if (selected; as group) {
+    @if (!loading && group.exams.length === 0) { <p>У цій групі поки немає іспитів із доступними оцінками.</p> }
+    @for (exam of group.exams; track exam.examId) {
+      <article><div><h4>{{ exam.title }}</h4><p>#{{ exam.examId }} · {{ exam.date | date:'dd.MM.yyyy' }} · {{ group.group || 'Без групи' }}</p>
+      <strong>{{ exam.eligibleCount }} оцінок готові</strong><span *ngIf="exam.excludedCount"> · {{ exam.excludedCount }} спроб не включено</span></div>
+      <button type="button" (click)="download(exam)" [disabled]="loading || downloading !== null">{{ downloading === exam.examId ? 'Завантаження…' : 'Завантажити CSV' }}</button></article>
+    }
+    @if (group.exclusions.length) { <details [open]="group.exams.length === 0"><summary>Чому частина оцінок недоступна?</summary><ul>@for(reason of group.exclusions;track reason.code){<li>{{ reason.message }}: {{ reason.count }}</li>}</ul><p>Перевірте спроби в архіві нижче, потім оновіть доступність. Старі оцінки не підставляються замість нової неперевіреної спроби.</p></details> }
+  }
+  <details><summary>Як імпортувати CSV в Moodle</summary><p>Журнал оцінок → Імпорт → CSV, UTF-8, роздільник — кома. Зіставте username з ім’ям користувача, grade — з елементом оцінювання (максимум 100). Логіни мають збігатися. Перевірте попередній перегляд: імпорт перезаписує оцінки вибраного елемента. Групування використовує поточну групу студента.</p></details>
+</section>

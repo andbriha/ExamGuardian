@@ -1,0 +1,29 @@
+---
+import Layout from '../layouts/Layout.astro'
+const paths = [
+{ number: '01', title: 'Launch the system', description: 'Choose development or production, configure the server, and connect the native client.', href: '/start', action: 'Open launch instructions' },
+{ number: '02', title: 'Run an exam', description: 'Prepare participants, configure an exam, monitor attempts, and review the evidence.', href: '/guide', action: 'Open organizer guide' },
+{ number: '03', title: 'Understand the architecture', description: 'Follow answers, recordings, and observations through the client, Core API, and AI service.', href: '/dev', action: 'Explore the architecture' },
+]
+---
+<Layout title="ExamGuardian | System documentation">
+<main id="main" class="overview">
+<section class="overview-hero"><div>
+<p class="eyebrow">System documentation · Pilot implementation</p>
+<h1>From exam setup<br />to a reviewed result.</h1>
+<p class="hero-description">ExamGuardian is a self-hosted examination system. Students take exams in a native desktop client; examiners review answers, camera and screen recordings, and automated observations in a web panel.</p>
+<div class="hero-actions"><a class="primary-link" href="/start">Launch dev or production →</a><a href="/docs">Browse documentation →</a></div>
+</div><aside class="result-card"><p class="eyebrow">Three separate outcomes</p><h2>A score is only part of the result.</h2><dl>
+<dt>Academic score</dt><dd>Calculated by Core from the student's answers.</dd>
+<dt>Evidence delivery</dt><dd>Shows whether camera and screen recordings arrived with complete coverage.</dd>
+<dt>Integrity verdict</dt><dd>Recorded by an examiner after reviewing observations and evidence.</dd>
+</dl></aside></section>
+<section aria-labelledby="choose-path"><p class="eyebrow">Choose your task</p><h2 id="choose-path">Where do you want to start?</h2><div class="route-grid">{paths.map(path => <a class="route-card" href={path.href}><span class="route-number">{path.number}</span><h3>{path.title}</h3><p>{path.description}</p><strong>{path.action} →</strong></a>)}</div></section>
+<section class="lifecycle" aria-labelledby="lifecycle-title"><div><p class="eyebrow">How it works</p><h2 id="lifecycle-title">One attempt, from admission to review.</h2><a href="/docs/08-runtime-view">Read the detailed lifecycle →</a></div><ol>
+<li><strong>Prepare</strong><span>The examiner creates students, reference photos, questions, schedule, and exam policy.</span></li>
+<li><strong>Verify &amp; take the exam</strong><span>The client checks identity and the environment. Core controls admission, saved answers, and the deadline.</span></li>
+<li><strong>Collect &amp; inspect</strong><span>The client queues recordings; AI produces observations. The panel refreshes through REST polling.</span></li>
+<li><strong>Review</strong><span>The examiner inspects delivery gaps and observations, then records an integrity verdict separately from the score.</span></li>
+</ol></section>
+<section class="scope-note"><h2>What the current implementation establishes</h2><p>Automated observations help direct human review. They do not prove cheating. Real-device behavior, attack resistance, model accuracy, and classroom-scale capacity still require measured validation.</p><a href="/docs/11-current-contract">Read current behavior and validation limits →</a></section>
+</main></Layout>

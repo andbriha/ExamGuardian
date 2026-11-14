@@ -1,0 +1,40 @@
+---
+interface Props { source: string }
+const { source } = Astro.props;
+---
+<figure class="diagram" data-diagram>
+  <div class="diagram-canvas" aria-label="Architecture diagram"></div>
+  <details class="diagram-source">
+    <summary>Diagram source</summary>
+    <pre><code>{source}</code></pre>
+  </details>
+  <p class="diagram-error" hidden role="status">This diagram could not be rendered. Its source is available below.</p>
+</figure>
+<script>
+  import mermaid from 'mermaid';
+  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default', fontFamily: 'Arial, sans-serif' });
+  async function renderDiagrams() {
+    await document.fonts.ready;
+    const diagrams = document.querySelectorAll<HTMLElement>('[data-diagram]:not([data-rendered])');
+    for (const [index, diagram] of Array.from(diagrams).entries()) {
+      diagram.dataset.rendered = 'pending';
+      const source = diagram.querySelector('code')?.textContent ?? '';
+      const canvas = diagram.querySelector<HTMLElement>('.diagram-canvas')!;
+      try {
+        await mermaid.parse(source);
+        const { svg, bindFunctions } = await mermaid.render(`diagram-${Date.now()}-${index}`, source);
+        canvas.innerHTML = svg;
+        bindFunctions?.(canvas);
+        diagram.dataset.rendered = 'success';
+      } catch (error) {
+        diagram.dataset.rendered = 'error';
+        diagram.querySelector<HTMLElement>('.diagram-error')!.hidden = false;
+        diagram.querySelector('details')!.open = true;
+        console.error('Diagram rendering failed', error);
+      }
+    }
+    document.documentElement.dataset.diagramsReady = 'true';
+  }
+  renderDiagrams();
+  document.addEventListener('astro:page-load', renderDiagrams);
+</script>

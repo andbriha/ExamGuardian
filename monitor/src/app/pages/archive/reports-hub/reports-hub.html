@@ -1,0 +1,46 @@
+<div class="hub-wrap">
+  <div class="header">
+    <h2>📊 Архів та Звіти</h2>
+    <p>Відомості груп, перевірка спроб та експорт оцінок</p>
+  </div>
+
+  <div *ngIf="isLoading" style="text-align: center; padding: 40px; color: #64748b;">
+    <p>⏳ Завантаження архіву звітів...</p>
+  </div>
+
+  <div *ngIf="!isLoading && errorMessage" style="text-align: center; padding: 40px; color: #ef4444;">
+    <p>{{ errorMessage }}</p>
+  </div>
+
+  <button type="button" (click)="loadReports()" [disabled]="isLoading || reviewSaving">Оновити архів</button>
+  <p *ngIf="reviewSuccess" role="status">{{ reviewSuccess }}</p>
+  <app-group-results [hidden]="!!errorMessage" [sessions]="sessions" [exams]="exams" [busy]="isLoading || reviewLoading || reviewSaving" (review)="openReview($event)" (report)="downloadReport($event)" />
+  <p *ngIf="reviewLoading" role="status">Оновлення стану спроби…</p>
+  <p *ngIf="reviewError" role="alert">{{ reviewError }}</p>
+  @if (review; as session) {
+    <section class="workflow-panel" aria-labelledby="review-heading">
+      <h3 id="review-heading">Рішення викладача · {{ session.studentName }} · спроба #{{ session.id }}</h3>
+      <p>{{ session.examTitle }} · Академічний бал: {{ session.scoreCalculated ? session.score + '/100' : 'Не розраховано' }}</p>
+      <p *ngIf="session.identityVerificationSkipped" role="status">DEV: перевірку особи пропущено. Тестова спроба не підлягає підтвердженню та експорту.</p>
+      <p>Поточний висновок: {{ verdictLabel(session.integrityVerdict) }}. Рішення не змінює бал за відповіді.</p>
+      <ul><li>Докази: {{ evidenceLabel(session.evidenceStatus) }}</li><li>Очікують перевірки: {{ session.pendingObservationCount ?? 0 }}</li><li>Підтверджені сигнали: {{ session.confirmedObservationCount ?? 0 }}</li></ul>
+      <a [routerLink]="['/monitor', session.examId]" [queryParams]="{session: session.id}">Переглянути записи та перевірити сигнали</a>
+      <button type="button" [disabled]="reviewSaving" (click)="openReview(session.id.toString())">Оновити стан спроби</button>
+      <label for="review-verdict">Висновок</label>
+      <select id="review-verdict" [(ngModel)]="reviewVerdict" [disabled]="reviewSaving">
+        <option value="">Оберіть висновок</option><option value="Accepted" [disabled]="!!reviewBlock('Accepted')">Прийнято після перевірки</option><option value="Rejected" [disabled]="!!reviewBlock('Rejected')">Добросовісність не підтверджено</option><option value="Inconclusive">Недостатньо доказів</option>
+      </select>
+      <p *ngIf="reviewBlock('Accepted') && reviewVerdict !== 'Accepted'" class="review-guidance">Прийняття недоступне: {{ reviewBlock('Accepted') }}</p>
+      <p *ngIf="reviewBlock(reviewVerdict)" role="status">{{ reviewBlock(reviewVerdict) }}</p>
+      <label for="review-notes">Обґрунтування для протоколу та апеляції (обов’язково)</label>
+      <textarea id="review-notes" [(ngModel)]="reviewNotes" maxlength="2000" rows="4" [disabled]="reviewSaving"></textarea>
+      <small>{{ reviewNotes.length }}/2000. Пізні докази можуть повернути спробу на перевірку.</small>
+      <button type="button" (click)="saveReview()" [disabled]="reviewSaving || !!reviewBlock(reviewVerdict) || !reviewNotes.trim()">{{ reviewSaving ? 'Збереження…' : 'Зберегти рішення' }}</button>
+      <button type="button" (click)="closeReview()" [disabled]="reviewSaving">Повернутися до відомості</button>
+      <details><summary>Історія рішень ({{ reviewHistory.length }})</summary>
+        @for (entry of reviewHistory; track $index) { <p>{{ entry.at | date:'medium' }} · {{ verdictLabel(entry.verdict) }} · {{ entry.reviewerId }}<br>{{ entry.notes }}</p> }
+      </details>
+    </section>
+  }
+  <app-grade-export />
+</div>

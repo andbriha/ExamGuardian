@@ -1,0 +1,81 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "11. Current implementation & validation"
+---
+
+# Current implementation and validation
+
+ExamGuardian supports a self-hosted examination and a reasoned examiner decision. The score measures answers. An automated observation does not establish cheating, and the integrity verdict is stored separately.
+
+## Groups and student schedule
+
+The examiner panel has a persistent group catalog, creation, and student assignment. Legacy group names remain selectable. Student and exam forms share the server catalog. Moving a student with an unfinished attempt is rejected.
+
+The native exam catalog includes upcoming exams for the student’s group and currently open exams with attempts remaining. It refreshes every five seconds while visible, shows start/end times in the device timezone, and uses server time for availability. Future exams expose metadata, not questions; Core still rejects early starts. Unchanged cards retain focus across polling.
+
+## Attempt contract
+
+The student chooses an assigned exam, passes a bound and expiring identity/pose challenge, and obtains a signed admission. Core controls the deadline, attempt limit and frozen exam definition. Resume keeps the original deadline and restores saved answers. A dedicated attempt token protects answers, submission and analysis; it rotates after a verified resume. Evidence delivery has a separate seven-day capability to support recovery.
+
+The client saves pending answers and queues recordings/events on disk. Core verifies readable MP4 tracks, actual durations, index immutability and SHA-256 retries. Camera and screen streams have explicit time ranges. Their final manifest distinguishes complete file coverage from partial or unknown delivery. It does not prove camera picture quality.
+
+## Monitoring and decisions
+
+The panel uses REST polling every eight seconds and authorized preview frames every two seconds. It shows connection, camera analysis, audio analysis and evidence delivery separately. Playback seeks using recorded offsets/durations; gaps are visible. Expired video links are renewed once while keeping the playback position.
+
+The examiner confirms or dismisses each observation with an audit history. An accepted attempt requires delivered evidence and dismissed observations. Rejection requires a confirmed observation. Inconclusive records insufficient evidence. Late observations or newly received media return an attempt to review, while the academic score stays fixed. The report is browser-printable HTML, not a signed immutable PDF.
+
+## AI scope
+
+Identity checks use DeepFace, face landmarks use MediaPipe, objects use YOLOv8 and speech activity uses WebRTC VAD. Continuous identity checking is periodic. The pose challenge requires a neutral baseline and a sustained transition on distinct frames. Anti-spoofing checks are enabled, but resistance to photographs/replays still needs labelled attack testing.
+
+Head landmarks provide normalized pose indicators, not calibrated gaze/Euler measurements. VAD indicates speech activity, not the identity of a speaker or the meaning of speech. The unvalidated micro-earpiece heuristic is disabled. Permitted speech, head-movement reporting and allowed objects are exam policy settings captured at attempt start.
+
+Models share a bounded analysis slot, reject oversized inputs and signal capacity errors. A SQLite outbox retries observations. Readiness waits for model loading and warmup. Accuracy and classroom-scale throughput have not been established by blank-frame startup checks. The offline evaluation tool records labelled confusion counts, latency, versions and sample/weight hashes.
+
+## Operations
+
+The normal topology is one Nginx origin. Qt sends media to AI through Nginx; AI validates attempts and sends durable events to Core. Core stores attempts in PostgreSQL. In the dev/production profiles, AI and PostgreSQL are internal services without published direct ports. Production uses the HTTPS overlay with a configured host certificate; the legacy stack has different port mappings. See [launch instructions](/start). Random bootstrap configuration replaces published default credentials in fresh installations.
+
+Database migrations are tracked. Backup includes database, media and online SQLite snapshots; restore uses a new isolated target. Retention is disabled until an administrator chooses a period and previews an explicit maintenance plan. It expires media for old finished/reviewed attempts while preserving answers, scores and review history.
+
+Build a release from source with `Client/build-release.ps1`. It checks packaged QML startup and records hashes/source state. Existing portal binaries need a deliberate update from a verified release.
+
+## Readiness boundary
+
+Windows and Linux builds, headless QML startup and disk-queue tests pass. A native Windows Qt client also completes login, admission, autosave and submission against the isolated API. Linux X11 device behavior still needs a practical test; Wayland blocking is unsupported. Real cameras, microphones, interrupted capture, multi-student load, false-positive rates and attack resistance need practical validation before an institutional pilot is accepted.
+
+Security changes, verification results and upgrade requirements are documented in `SECURITY_HARDENING_2026-11-14.md` in the repository. Chapters 01–10 retain design context and must not be read as confirmation that every proposed capability is implemented.
+
+
+## Development and production implementation checkpoint
+
+The isolated Compose environments and launcher are implemented. `./run.ps1` selects development; `--production` or `--prod` selects production, requiring an independent `.env.production` and actual HTTPS configuration. `--check`, `--status` and `--stop` operate on the selected project. Stopping development preserves its volumes and the existing legacy stack.
+
+Development runs Core watch, AI reload, Angular live updates and an Astro container. Qt is native. On this workstation the application origin is `http://127.0.0.1:8081`; the documentation container uses port 4323 because 4321/4322 already host existing documentation servers. Newly initialized installations select an available docs port and store it in `.env.dev`.
+
+The DEV client menu is local and opens before login. It disables selected local restrictions and offers an optional server-authorized DEV identity bypass. Recording and ongoing monitoring remain ordinary. Bypassed attempts are visibly marked and excluded from approval/export; production artifacts omit the bypass endpoint. Automated fixtures previously left in the working dev database were removed after a backup, preserving the user's student and examiner accounts. Further mutation tests use disposable databases only.
+
+The landing is shared with production; a development file mount serves the DEV installer at the common download URL. Production deployment still requires configured HTTPS and `.env.production`. Physical-device and classroom-load validation remain outstanding.
+
+Examination availability is the absolute interval from the scheduled UTC start (inclusive) to start plus duration (exclusive). A late arrival keeps that same end time. After it, no start/resume or answer change is accepted. Creation converts an explicit local time and IANA timezone on the server; ambiguous/missing DST times are rejected. The panel uses the server clock and refreshes scheduled/active/completed state.
+
+Head direction is anatomical: left/right refer to the student, not the observer looking at an unmirrored image. Recording delivery keeps independent attempt queues: a deleted attempt or permanent rejection cannot block a newer attempt. Existing real files can be retried and are removed locally only after a matching hash acknowledgement.
+
+
+## Teacher decisions and interchange
+
+The archive exposes the evidence/observation prerequisites, a reasoned decision form and review history. Server checks remain authoritative. Examiner-only `GET /api/grade-exports` lists groups, eligible exams and exclusion reasons. `GET /api/exams/{examId}/grades?group=...` requires a selected group (empty means ungrouped) and exports the latest eligible Accepted attempt per student as UTF-8 CSV (`username,grade`); ownership is enforced. Moodle mapping and the distinction from automatic synchronization are described in the [organizer guide](/guide#6-export-approved-grades-to-moodle).
+
+Examiner-only `POST /api/exams/import-qti` accepts multipart field `file`, validates XML/ZIP and returns a preview (`questions`, `issues`, `canImport`, `notice`) without creating an exam. The builder adds a fully supported package to the draft. Supported QTI 2.1/2.2 single-choice text items use standard match_correct scoring. Unsupported content, partial credit and custom processing are reported explicitly; the importer is not a general QTI engine. See [import limits](/guide#7-import-existing-qti-questions).
+
+
+## Group onboarding and shareable results
+
+Examiner-only student import separates parsing, protected preview and serializable commit (`/api/students/import/preview`, `/commit`). A preview is bound to the examiner and expires after 15 minutes. CSV/TSV/TXT or pasted spreadsheet rows support full name and optional login, up to 200 rows. Commit is all-or-nothing and safe to retry without rotating existing passwords.
+
+`GET /api/groups/credentials?group=...&format=pdf` downloads stored institution-issued credentials without mutation. Explicit POST rotates the confirmed group membership. Recoverable passwords use ASP.NET Data Protection bound to the user ID, alongside BCrypt login hashes; independently changed passwords are never recovered. The key ring resides in the persistent `credential_keys` volume. Backup/restore now includes this directory; losing it makes encrypted credentials unreadable. Protect backups and the host key directory as credential material. Older backups without keys can still restore accounts, but require password reissue for downloadable access sheets.
+
+`GET /api/group-results?examId=...&group=...&format=json|pdf` enforces exam ownership and uses the current roster and latest attempt. Only finished Accepted non-DEV attempts expose scores; other rows contain status only. Questions carry a report category in the frozen attempt snapshot; `QuestionScoresJson` stores awarded points independently of question type. Legacy choice attempts use their frozen answers and correct indices when marks are absent. PDF generation, font resolution, credential export and result aggregation are separate services. Embedded Noto Sans fonts support Cyrillic and Latin in Linux containers.
+
+The printable PDF is distinct from LMS CSV. Listening and matching are future interactions; category metadata does not implement them. Automated workflow checks cover duplicate/conflicting rosters, retries, credential recovery, authorization, frozen categories and non-public marks. The Python workflow suite requires `pypdf`; run `dotnet run --project tests/WorkflowChecks -- output/pdf` for dummy multi-page PDF samples and parser/aggregation checks.

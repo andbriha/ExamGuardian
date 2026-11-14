@@ -1,0 +1,126 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: "10. Architecture & Usability Roadmap"
+---
+
+import Mermaid from '../../components/Mermaid.astro';
+
+> Design documentation retained for context. Some sections describe targets or older behavior. See the [current implementation and validation contract](/docs/11-current-contract) before using operational instructions or capability claims.
+
+
+# 10. Architecture & Usability Roadmap
+
+This document outlines the systematic architectural evolution and user experience (UX) enhancement plan for **ExamGuardian**, identifying vulnerabilities, structural bottlenecks, and actionable engineering improvements across all system tiers.
+
+---
+
+## 10.1 Strategic Evolution Matrix
+
+<Mermaid source={"graph TD\n    subgraph Security Hardening\n        S1[\"CORS Restrictive Policy\\n(Limit to Monitor & Portal Origins)\"]\n        S2[\"Protect Violation Ingestion\\n(HMAC / JWT signature on /report)\"]\n        S3[\"Internal Network Isolation\\n(Drop public port 8000 for AI microservice)\"]\n        S4[\"Token Rotation\\n(Short-lived JWTs 60m + HttpOnly Cookies)\"]\n    end\n\n    subgraph Data & Schema Maturation\n        D1[\"Integrity Scoring Entity\\n(Persist IntegrityScore & Verdict in DB)\"]\n        D2[\"Severity Classification\\n(Explicit enum: Critical, Warning, Info)\"]\n        D3[\"Composite Query Indexing\\n(Fast lookups by session and timestamp)\"]\n        D4[\"Normalized Group Hierarchy\\n(StudentGroups table with academic year)\"]\n    end\n\n    subgraph Scalability & Resilience\n        R1[\"Container Healthchecks\\n(Auto-restart & startup ordering)\"]\n        R2[\"Asynchronous Queue\\n(Redis/RabbitMQ decoupling under 500+ load)\"]\n        R3[\"Chunk Upload Fault Tolerance\\n(Resumable uploads + local retry queue)\"]\n    end\n\n    subgraph UX & Ergonomics\n        U1[\"Student Diagnostic Wizard\\n(One-click remedy for VM / background apps)\"]\n        U2[\"Live Network Heartbeat\\n(Client-side ping & latency indicators)\"]\n        U3[\"Real-time SignalR Event Bus\\n(Instant alerts replacing 8s polling)\"]\n        U4[\"LMS Webhook Synchronization\\n(Moodle, Canvas grade auto-dispatch)\"]\n    end"} />
+
+---
+
+## 10.2 Security Hardening
+
+### 1. Restrictive CORS Configuration
+* **Current State:** `Program.cs` registers `AllowAll` (`AllowAnyOrigin()`, `AllowAnyMethod()`, `AllowAnyHeader()`), leaving APIs vulnerable to cross-site request forgery and unwanted cross-origin scripting from arbitrary domains.
+* **Target Architecture:** Restrict origins based on environment configuration:
+  ```csharp
+  builder.Services.AddCors(options =>
+  {
+      options.AddPolicy("StrictProctoringPolicy", policy =>
+      {
+          var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+              ?? new[] { "http://localhost", "http://localhost:80" };
+          policy.WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+      });
+  });
+  ```
+
+### 2. Guarding Client-Side Violation Webhooks
+* **Current State:** `POST /api/Violations/report` is decorated with `[AllowAnonymous]`. An unauthorized actor could forge requests and flood the database with false violation logs.
+* **Target Architecture:** Enforce JWT Bearer validation (`[Authorize(Roles = SystemRoles.Student)]`) and ensure `ExamSessionId` matches the authenticated `StudentId` from token claims before persisting alerts.
+
+### 3. Isolation of AI Inference Microservice
+* **Current State:** In `docker-compose.yml`, `ai_service` maps host port `8000:8000`. This directly exposes biometric and facial inference endpoints to external traffic.
+* **Target Architecture:** Remove host port mapping. The AI service should communicate strictly through Docker's internal `app_network` via Core API routing.
+
+---
+
+## 10.3 Relational Schema Enhancements
+
+To preserve complete academic auditability and prevent data loss during long-term storage, the relational model is enhanced with formal integrity attributes:
+
+<Mermaid source={"erDiagram\n    EXAM_SESSIONS ||--o{ VIOLATION_ALERTS : \"logs\"\n    STUDENT_GROUPS ||--o{ USERS : \"belongs to\"\n    USERS ||--o{ EXAM_SESSIONS : \"takes\"\n\n    EXAM_SESSIONS {\n        int Id PK\n        guid StudentId FK\n        int ExamId FK\n        datetime StartTime\n        datetime EndTime\n        double TestScore \"0..100 points\"\n        double IntegrityScore \"0..100 confidence\"\n        string IntegrityVerdict \"Passed | UnderReview | Disqualified\"\n        bool IsFinished\n    }\n\n    VIOLATION_ALERTS {\n        int Id PK\n        int ExamSessionId FK\n        string ViolationType\n        string Severity \"Critical | Warning | Info\"\n        double Confidence\n        int RelativeTimestampSeconds\n        string EvidenceUrl\n        string Metadata \"JSON key-value\"\n        datetime Timestamp\n        bool IsReviewed\n        string ReviewNotes \"Proctor remarks\"\n    }\n\n    STUDENT_GROUPS {\n        guid Id PK\n        string Code \"e.g. KN-2021-1\"\n        string Faculty\n        int AcademicYear\n    }"} />
+
+### Proposed Schema Changes:
+1. **`ExamSession`**:
+   - `IntegrityScore: double` — Calculated composite score (0–100%) based on confirmed infractions.
+   - `IntegrityVerdict: string` — Final decision (`Passed`, `UnderReview`, `TerminatedByProctor`).
+2. **`ViolationAlert`**:
+   - `Severity: string` (`Critical`, `Warning`, `Info`) — Replaces client-side guessing with definitive backend validation.
+   - `ReviewNotes: string?` — Auditor's commentary during manual protocol defense.
+3. **Composite Database Indexes**:
+   - `CREATE INDEX idx_violations_session_time ON "ViolationAlerts" ("ExamSessionId", "RelativeTimestampSeconds");`
+   - `CREATE INDEX idx_violations_unreviewed ON "ViolationAlerts" ("IsReviewed", "Timestamp") WHERE NOT "IsReviewed";`
+
+---
+
+## 10.4 Infrastructure & Resilience
+
+### 1. Docker Compose Healthchecks
+Introducing declarative container healthchecks ensures dependent microservices wait until the PostgreSQL database and Core API are completely initialized:
+
+```yaml
+services:
+  db:
+    image: postgres:16-alpine
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-ExamGuardianDB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/ExamSessions || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+```
+
+### 2. High-Capacity Chunk Upload Queue
+For universities hosting examinations with 500+ simultaneous candidates:
+* Chunks are temporarily buffered in `%TEMP%\ExamGuardian\chunks\`.
+* The client implements exponential backoff retry (1s, 2s, 4s, 8s) upon experiencing `503 Service Unavailable` or connection timeouts.
+* Before triggering final exam submission, the client executes an explicit pre-flight flush checking that all chunks 0..N have received HTTP 200 confirmations from `/api/video/upload-chunk`.
+
+---
+
+## 10.5 Usability & Ergonomics (UX)
+
+### For Students:
+1. **Pre-flight Diagnostic Wizard:**
+   - Rather than displaying a generic error message when a prohibited application is found, the client presents an interactive list of offending processes (e.g. Discord, Telegram) with an option: *"Terminate prohibited processes automatically and re-test"*.
+2. **Real-Time Network Telemetry:**
+   - A non-intrusive status icon on the top banner displays real-time latency (RTT), video chunk synchronization status, and remaining time.
+3. **Local Answer State Caching:**
+   - On every question click, the selected answer is immediately committed to SQLite or encrypted local disk cache before firing the REST payload, eliminating test data loss in case of instant power drops.
+
+### For Exam Proctors:
+1. **Instant WebSockets via SignalR:**
+   - Replace 8-second polling on `/api/Violations/unreviewed` with real-time push events via SignalR `ExamMonitorHub`, delivering incident notifications within 200ms.
+2. **Batch Operations Roster Management:**
+   - Import student cohorts via `.csv` or `.xlsx` files with automatic credential generation and PDF print sheet distribution for classes.
+3. **Configurable Threshold Presets:**
+   - Different testing formats require tailored strictness:
+     - *Strict Kiosk (Coding/Multiple Choice):* Strict yaw/pitch thresholds, immediate flag on looking down.
+     - *Handwritten Math Exam:* Looser pitch threshold to allow working on physical scratch paper on the desk.
+4. **LMS Gradebook Integration:**
+   - Webhook integrations for Moodle and Canvas (IMS LTI 1.3 standard) to push final validated test scores directly into the university student information system.

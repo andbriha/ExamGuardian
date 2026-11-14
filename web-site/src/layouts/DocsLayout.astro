@@ -1,0 +1,19 @@
+---
+import '../styles/global.css'
+import Navigation from '../components/Navigation.astro'
+import { sections } from '../data/navigation'
+const title = Astro.props.title ?? Astro.props.frontmatter?.title ?? 'Documentation'
+const pathname = Astro.url.pathname.replace(/\/$/, '')
+---
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>{title} | ExamGuardian Docs</title></head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a><Navigation />
+<div class="documentation-shell">
+<aside class="documentation-sidebar"><details open><summary>Browse documentation</summary><nav aria-label="Documentation">
+{sections.map(section => <div class="sidebar-group"><p>{section.title}</p>{section.items.map(item => <a href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.title}</a>)}</div>)}
+</nav></details></aside>
+<main id="main" class="docs-content documentation-article"><slot /></main>
+</div>
+</body></html>
