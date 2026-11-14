@@ -65,7 +65,8 @@ public class VideoUploadController(IWebHostEnvironment env, SessionAccess access
             }
             if (newChunk || newMetadata) {
                 var session = await db.Sessions.FindAsync(sessionId);
-                session!.EvidenceStatus = "Pending";
+                session!.EvidenceRevision++;
+                session.EvidenceStatus = "Pending";
                 session.IntegrityVerdict = "UnderReview";
                 await db.SaveChangesAsync();
             }

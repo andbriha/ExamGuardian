@@ -27,4 +27,6 @@ EXPOSE 8080
 
 COPY --from=publish /app/publish .
 
+RUN mkdir -p /app/state /app/credential-keys /app/ExamVideos /app/InferenceImages && chown -R app:app /app
+USER app
 ENTRYPOINT ["dotnet", "Api.dll"]

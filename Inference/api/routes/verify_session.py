@@ -1,6 +1,8 @@
 import hashlib
 import json
 import os
+import hmac
+import hashlib
 import secrets
 import sqlite3
 import time
@@ -245,7 +247,8 @@ async def verify_identity_and_liveness(task: str, challenge_id: str, current: Up
                             phrase=row["phrase"] if sequence[step] == "say_phrase" else None)
             return response
         db.execute("UPDATE challenges SET used=1,audio_buffer=NULL WHERE id=? AND used=0", (challenge_id,))
-    key = os.environ.get("JWT__KEY") or settings.jwt_secret_key
+    if len(settings.ai_api_key) < 32: raise HTTPException(503, "Admission signing is not configured")
+    key = hmac.new(settings.ai_api_key.encode(), b"admission:v1", hashlib.sha256).digest()
     issuer = os.environ.get("JWT__ISSUER") or settings.jwt_issuer
     admission = jwt.encode({"sub": user_info["id"], "exam_id": str(row["exam"]), "purpose": "admission", "jti": challenge_id,
         "iss": issuer, "aud": "ExamGuardianAdmission", "iat": int(now), "exp": int(now)+120}, key, algorithm="HS256")

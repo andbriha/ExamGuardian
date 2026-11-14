@@ -1,3 +1,9 @@
+using BusinessLogicLayer.Security;
+using BusinessLogicLayer.Services;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Threading.RateLimiting;
+using System.Security.Claims;
 using BusinessLogicLayer;
 using Core.Seeding;
 using DataAccessLayer;
@@ -19,17 +25,33 @@ public class Program
             catch { Environment.Exit(1); }
             return;
         }
-        var builder = WebApplication.CreateBuilder(args.Where(a => a is not ("--retention-preview" or "--retention-apply")).ToArray());
+        var builder = WebApplication.CreateBuilder(args.Where(a => a is not ("--retention-preview" or "--retention-apply" or "--migrate")).ToArray());
         var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
         if (string.IsNullOrWhiteSpace(connectionString)) throw new InvalidOperationException("Database connection is required.");
         var jwtKey = builder.Configuration["Jwt:Key"];
         if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32) throw new InvalidOperationException("Configure a random Jwt__Key of at least 32 characters.");
         if (string.IsNullOrWhiteSpace(builder.Configuration["Jwt:Issuer"]) || string.IsNullOrWhiteSpace(builder.Configuration["Jwt:Audience"])) throw new InvalidOperationException("JWT issuer and audience are required.");
-        if (string.IsNullOrWhiteSpace(builder.Configuration["AiService:ApiKey"])) throw new InvalidOperationException("Configure AiService__ApiKey.");
+        if (string.IsNullOrWhiteSpace(builder.Configuration["AiService:ApiKey"]) || builder.Configuration["AiService:ApiKey"]!.Length < 32) throw new InvalidOperationException("Configure AiService__ApiKey.");
 
         builder.Services.AddControllers();
+        builder.Services.AddProblemDetails();
+        builder.Services.Configure<ForwardedHeadersOptions>(options => {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+                options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+        });
+        builder.Services.AddRateLimiter(options => {
+            options.RejectionStatusCode = 429;
+            options.AddPolicy("authentication", context => RateLimitPartition.GetFixedWindowLimiter(
+                context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions {
+                    PermitLimit = builder.Configuration.GetValue<int?>("Security:AuthRequestsPerMinute") ?? 120,
+                    Window = TimeSpan.FromMinutes(1), QueueLimit = 0
+                }));
+        });
         var keysPath = builder.Configuration["CredentialKeysPath"] ?? Path.Combine(builder.Environment.ContentRootPath, "state", "credential-keys");
         Directory.CreateDirectory(keysPath);
+        var accessKeys = new AccessTokenKeys(Path.Combine(keysPath, "access"));
+        builder.Services.AddSingleton(accessKeys);
         builder.Services.AddDataProtection().SetApplicationName("ExamGuardian").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
         builder.Services.AddSingleton<Core.Security.IssuedCredentials>();
         builder.Services.AddScoped<Core.Importing.Students.RosterImportService>();
@@ -102,6 +124,7 @@ public class Program
         builder.Services.AddDataAccessDependencies(builder.Configuration);
         builder.Services.AddBusinessDependencies();
         builder.Services.AddScoped<Core.Security.SessionAccess>();
+        builder.Services.AddScoped<Core.Security.RosterAccess>();
         builder.Services.AddSingleton<Core.Security.MediaLinkSigner>();
         builder.Services.AddSingleton<Core.Security.AdmissionValidator>();
         builder.Services.AddSingleton<Core.Security.AttemptTokens>();
@@ -124,8 +147,20 @@ public class Program
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = builder.Configuration["Jwt:Issuer"],
                 ValidAudience = builder.Configuration["Jwt:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
+                IssuerSigningKey = accessKeys.Key,
+                ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
+                ClockSkew = TimeSpan.FromSeconds(5),
+            };
+            options.Events = new JwtBearerEvents {
+                OnTokenValidated = async context => {
+                    var principal = context.Principal!;
+                    if (!Guid.TryParse(principal.FindFirst("sid")?.Value, out var sid)) { context.Fail("Session required"); return; }
+                    var db = context.HttpContext.RequestServices.GetRequiredService<DataAccessLayer.Data.AppDbContext>();
+                    var session = await db.AuthSessions.AsNoTracking().Include(s => s.User).SingleOrDefaultAsync(s => s.Id == sid);
+                    if (session is null || session.RevokedAt is not null || session.ExpiresAt <= DateTime.UtcNow ||
+                        session.UserId != Core.Security.SessionAccess.UserId(principal) || session.CredentialStamp != AuthService.Hash(session.User.PasswordHash) ||
+                        principal.FindFirst(ClaimTypes.Role)?.Value != session.User.Role) context.Fail("Session revoked");
+                }
             };
         });
 
@@ -137,7 +172,8 @@ public class Program
             return;
         }
 
-        DbInitializer.Initialize(app.Services);
+        DbInitializer.Initialize(app.Services, args.Contains("--migrate"));
+        if (args.Contains("--migrate")) return;
 
         if (app.Environment.IsDevelopment())
         {
@@ -145,6 +181,10 @@ public class Program
             app.MapScalarApiReference();
         }
 
+        app.UseExceptionHandler();
+        app.UseForwardedHeaders();
+        app.UseRateLimiter();
+        app.MapGet("/.well-known/jwks.json", () => Results.Ok(accessKeys.PublicJwks()));
         if (builder.Configuration.GetValue<bool>("Https:Redirect")) app.UseHttpsRedirection();
         app.UseCors("AllowAll");
         app.UseAuthentication();

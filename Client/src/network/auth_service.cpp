@@ -3,13 +3,16 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
+#include "server_connection_policy.h"
 
 AuthService::AuthService(QObject *parent) : QObject(parent) {
     m_manager = new QNetworkAccessManager(this);
+    m_manager->setRedirectPolicy(QNetworkRequest::SameOriginRedirectPolicy);
     m_manager->setTransferTimeout(15000);
 }
 
 void AuthService::login(const QString &login, const QString &password, const QString &baseUrl) {
+    if (!allowedClientOrigin(QUrl(baseUrl))) { emit loginFailed("Потрібна HTTPS-адреса сервера з дійсним сертифікатом."); return; }
     QNetworkRequest request(QUrl(baseUrl + "/api/Auth/login"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
@@ -49,6 +52,7 @@ void AuthService::login(const QString &login, const QString &password, const QSt
 }
 
 void AuthService::refresh(const QString &baseUrl) {
+    if (!allowedClientOrigin(QUrl(baseUrl))) { emit loginFailed("Адреса сервера не відповідає політиці HTTPS."); return; }
     QNetworkRequest request(QUrl(baseUrl + "/api/Auth/refresh"));
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 

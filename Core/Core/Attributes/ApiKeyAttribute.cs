@@ -19,7 +19,7 @@ public class ApiKeyAttribute : Attribute, IAsyncActionFilter
         var configuration = context.HttpContext.RequestServices.GetRequiredService<IConfiguration>();
         var apiKey = configuration.GetValue<string>("AiService:ApiKey");
 
-        if (string.IsNullOrEmpty(apiKey) || !string.Equals(apiKey, extractedApiKey, StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(apiKey) || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(System.Text.Encoding.UTF8.GetBytes(apiKey), System.Text.Encoding.UTF8.GetBytes(extractedApiKey.ToString())))
         {
             context.Result = new UnauthorizedObjectResult("Unauthorized client.");
             return;

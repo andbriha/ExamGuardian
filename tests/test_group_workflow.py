@@ -76,7 +76,7 @@ class GroupWorkflow(CoreContracts):
         self.assertNotIn(self.students[0][2],text);self.assertNotIn(self.students[0][3],text)
         self.assertEqual(request(path,token=self.students[0][1])[0],403)
         other_teacher=jwt_token({'id':str(uuid4()),'role':'Examiner','iss':'ExamGuardianTest','aud':'ExamGuardianTestClient','exp':4102444800})
-        self.assertEqual(request(path,token=other_teacher)[0],404)
+        self.assertEqual(request(path,token=other_teacher)[0],401)
         self.start()  # latest unfinished attempt must hide the earlier accepted grade
         _,report=request(path,token=self.teacher)
         self.assertTrue(all(s['grade'] is None for s in report['students']))

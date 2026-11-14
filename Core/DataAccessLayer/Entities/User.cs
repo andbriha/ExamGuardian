@@ -3,6 +3,7 @@ namespace DataAccessLayer.Entities;
 
 public class User
 {
+    public bool CanManageRoster { get; set; }
     public Guid Id { get; set; }
     public string FullName { get; set; } = null!;
     public string Login { get; set; } = null!;

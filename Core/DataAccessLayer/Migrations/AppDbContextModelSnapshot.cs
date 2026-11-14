@@ -22,6 +22,35 @@ namespace DataAccessLayer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("DataAccessLayer.Entities.AuthSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CredentialStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("AuthSessions");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.Exam", b =>
                 {
                     b.Property<int>("Id")
@@ -109,6 +138,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<string>("EvidenceManifestJson")
                         .HasColumnType("text");
 
+                    b.Property<long>("EvidenceRevision")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("EvidenceStatus")
                         .IsRequired()
                         .HasColumnType("text");
@@ -184,6 +216,20 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("Sessions");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.ExaminerGroupGrant", b =>
+                {
+                    b.Property<Guid>("ExaminerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Group")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("ExaminerId", "Group");
+
+                    b.ToTable("ExaminerGroupGrants");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.Question", b =>
                 {
                     b.Property<int>("Id")
@@ -223,6 +269,25 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("Questions");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.RefreshCredential", b =>
+                {
+                    b.Property<string>("Hash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Hash");
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("RefreshCredentials");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.StudentGroup", b =>
                 {
                     b.Property<string>("Name")
@@ -242,6 +307,9 @@ namespace DataAccessLayer.Migrations
 
                     b.Property<string>("BioVector")
                         .HasColumnType("text");
+
+                    b.Property<bool>("CanManageRoster")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("FullName")
                         .IsRequired()
@@ -380,6 +448,17 @@ namespace DataAccessLayer.Migrations
                     b.ToTable("QuestionOptions");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.AuthSession", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.Exam", b =>
                 {
                     b.HasOne("DataAccessLayer.Entities.User", "Creator")
@@ -410,6 +489,15 @@ namespace DataAccessLayer.Migrations
                     b.Navigation("Student");
                 });
 
+            modelBuilder.Entity("DataAccessLayer.Entities.ExaminerGroupGrant", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ExaminerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("DataAccessLayer.Entities.Question", b =>
                 {
                     b.HasOne("DataAccessLayer.Entities.Exam", "Exam")
@@ -419,6 +507,17 @@ namespace DataAccessLayer.Migrations
                         .IsRequired();
 
                     b.Navigation("Exam");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.RefreshCredential", b =>
+                {
+                    b.HasOne("DataAccessLayer.Entities.AuthSession", "Session")
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("DataAccessLayer.Entities.ViolationAlert", b =>

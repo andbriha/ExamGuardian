@@ -29,6 +29,7 @@ public class ExamSession
     public Guid? IntegrityReviewedBy { get; set; }
     public DateTime? IntegrityReviewedAt { get; set; }
     public string? IntegrityHistoryJson { get; set; }
+    public long EvidenceRevision { get; set; }
     public string EvidenceStatus { get; set; } = "Pending";
 
 

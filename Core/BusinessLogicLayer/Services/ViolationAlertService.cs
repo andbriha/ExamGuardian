@@ -99,13 +99,14 @@ public class ViolationAlertService : IViolationAlertService
         return MapToDto(violation);
     }
 
-    public async Task ReviewAsync(int violationId, Guid reviewerId, string decision, string? notes)
+    public async Task ReviewAsync(int violationId, Guid reviewerId, string decision, string? notes, string expectedVersion)
     {
         if (!ObservationPolicy.ValidDecision(decision) || string.IsNullOrWhiteSpace(notes) || notes.Length > 2000) throw new ArgumentException("A review decision and its reason are required.");
         var v = await _db.Violations.FindAsync(violationId) ?? throw new KeyNotFoundException("Observation not found.");
         await using var transaction = await _db.Database.BeginTransactionAsync();
         await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(1,{v.ExamSessionId})");
         await _db.Entry(v).ReloadAsync();
+        if (ReviewStateVersion.Observation(v) != expectedVersion) throw new InvalidOperationException("Спостереження змінилося. Оновіть матеріали перед рішенням.");
         var session = await _db.Sessions.FindAsync(v.ExamSessionId);
         if (session is not null) session.IntegrityVerdict = "UnderReview";
         var history = JsonSerializer.Deserialize<List<object>>(v.ReviewHistoryJson ?? "[]") ?? new();
@@ -128,6 +129,7 @@ public class ViolationAlertService : IViolationAlertService
         EvidenceUrl = va.EvidenceUrl,
         Metadata = va.Metadata,
         Timestamp = va.Timestamp,
+        ReviewVersion = ReviewStateVersion.Observation(va),
         IsReviewed = va.IsReviewed,
         ReviewDecision = va.ReviewDecision, ReviewedBy = va.ReviewedBy, ReviewedAt = va.ReviewedAt, ReviewNotes = va.ReviewNotes, ReviewHistoryJson = va.ReviewHistoryJson, EventId = va.EventId,
     };

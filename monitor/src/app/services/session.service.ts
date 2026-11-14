@@ -5,6 +5,7 @@ import { environment } from '../../environments/environment';
 
 export interface ExamSessionDto {
   id: number;
+  reviewVersion?: string;
   identityVerificationSkipped?: boolean;
   studentId: string;
   studentName: string;
@@ -57,5 +58,5 @@ export class SessionService {
   }
   getPreview(id: number): Observable<HttpResponse<Blob>> { return this.http.get(`${this.apiUrl}/${id}/preview`, { responseType: 'blob', observe: 'response' }); }
   terminate(id: number): Observable<ExamSessionDto> { return this.http.post<ExamSessionDto>(`${this.apiUrl}/${id}/terminate`, {}); }
-  review(id: number, verdict: string, notes: string): Observable<ExamSessionDto> { return this.http.post<ExamSessionDto>(`${this.apiUrl}/${id}/review`,{verdict,notes}); }
+  review(id: number, verdict: string, notes: string, expectedVersion?: string): Observable<ExamSessionDto> { return this.http.post<ExamSessionDto>(`${this.apiUrl}/${id}/review`,{verdict,notes,...(expectedVersion ? {expectedVersion} : {})}); }
 }

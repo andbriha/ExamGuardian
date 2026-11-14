@@ -19,7 +19,7 @@ class PhonemeAnalyzer:
             import torch
             from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2ForCTC
             self.extractor = Wav2Vec2FeatureExtractor.from_pretrained(path, local_files_only=True)
-            self.vocabulary = {v: k for k, v in json.loads((path / "vocab.json").read_text()).items()}
+            self.vocabulary = {v: k for k, v in json.loads((path / "vocab.json").read_text(encoding="utf-8")).items()}
             self.groups = {}
             for token_id, token in self.vocabulary.items():
                 self.groups.setdefault(normalize(token), []).append(token_id)

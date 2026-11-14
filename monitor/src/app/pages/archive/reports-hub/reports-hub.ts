@@ -85,7 +85,7 @@ export class ReportsHubComponent implements OnInit {
   saveReview() {
     if (!this.review || this.reviewSaving || this.reviewBlock(this.reviewVerdict) || !this.reviewNotes.trim()) return;
     this.reviewSaving = true; this.reviewError = '';
-    this.sessionService.review(this.review.id, this.reviewVerdict, this.reviewNotes.trim()).subscribe({
+    this.sessionService.review(this.review.id, this.reviewVerdict, this.reviewNotes.trim(), this.review.reviewVersion).subscribe({
       next: () => { this.reviewSaving = false; this.reviewSuccess = 'Рішення збережено.'; this.closeReview(); this.loadReports(); this.gradeExport?.refresh(); },
       error: error => { this.reviewSaving = false; this.reviewError = error.error?.message || 'Не вдалося зберегти рішення. Оновіть стан спроби.'; this.cdr.markForCheck(); }
     });

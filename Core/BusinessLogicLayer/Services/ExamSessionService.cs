@@ -159,11 +159,12 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
         await tx.CommitAsync(); return MapToDto(s);
     }
 
-    public async Task<ExamSessionDto> ReviewSessionAsync(int sessionId, Guid reviewerId, string verdict, string notes) {
+    public async Task<ExamSessionDto> ReviewSessionAsync(int sessionId, Guid reviewerId, string verdict, string notes, string expectedVersion) {
         if (verdict is not ("Accepted" or "Rejected" or "Inconclusive") || string.IsNullOrWhiteSpace(notes) || notes.Length > 2000) throw new ArgumentException("A verdict and its reason are required.");
         await using var tx = await db.Database.BeginTransactionAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(1,{sessionId})");
         var s = await Details.FirstOrDefaultAsync(s => s.Id == sessionId) ?? throw new KeyNotFoundException("Session not found.");
+        if (ReviewStateVersion.Session(s) != expectedVersion) throw new InvalidOperationException("Матеріали або рішення змінилися. Оновіть спробу перед збереженням.");
         if (!s.IsFinished) throw new InvalidOperationException("Finish the attempt before reviewing it.");
         if (verdict == "Accepted" && s.AdmissionId?.StartsWith("dev_") == true) throw new InvalidOperationException("DEV attempt: identity verification was skipped. This result cannot be accepted.");
         if (verdict == "Accepted" && s.Violations.Any(v => !ObservationPolicy.IsCleared(v.ReviewDecision))) throw new InvalidOperationException("Resolve every observation as a detection error or no violation before accepting the attempt.");
@@ -178,6 +179,7 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
     }
 
     private static ExamSessionDto MapToDto(ExamSession s) => new() {
+        ReviewVersion = ReviewStateVersion.Session(s),
         IdentityVerificationSkipped = s.AdmissionId?.StartsWith("dev_") == true,
         Id = s.Id, ActiveClientId = s.ActiveClientId, EvidenceClientId = s.EvidenceClientId, StudentId = s.StudentId, StudentName = s.Student?.FullName ?? "", ExamId = s.ExamId, ExamTitle = s.Exam?.Title ?? "",
         StartTime = s.StartTime, EndTime = s.EndTime, Score = s.Score, ScoreCalculated = s.IsFinished && (s.Status is "Completed" or "TimedOut"), PassingScoreAtStart = s.PassingScoreAtStart, IsFinished = s.IsFinished, ViolationCount = s.Violations.Count,

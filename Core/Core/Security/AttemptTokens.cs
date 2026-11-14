@@ -8,7 +8,7 @@ namespace Core.Security;
 
 public sealed class AttemptTokens(IConfiguration config)
 {
-    private SymmetricSecurityKey Key => new(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
+    private SymmetricSecurityKey Key => new(System.Security.Cryptography.HMACSHA256.HashData(Encoding.UTF8.GetBytes(config["Jwt:Key"]!), Encoding.UTF8.GetBytes("attempt-capabilities:v1")));
     public string Issue(Guid student, int session, string clientId, bool evidence)
     {
         var purpose = evidence ? "evidence" : "attempt";

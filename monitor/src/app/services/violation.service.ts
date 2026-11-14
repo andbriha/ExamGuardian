@@ -16,6 +16,7 @@ export interface ViolationAlertDto {
   eventId: string;
   isReviewed: boolean;
   reviewDecision: "Pending" | "Confirmed" | "Dismissed" | "NoViolation" | "InsufficientEvidence" | "LegacyReviewed";
+  reviewVersion?: string;
   reviewNotes?: string;
   reviewHistoryJson?: string;
   reviewedAt?: string;
@@ -49,8 +50,8 @@ export class ViolationService {
     return this.http.get<ViolationAlertDto[]>(`${this.apiUrl}/by-session/${sessionId}`);
   }
 
-  markAsReviewed(id: number, decision: "Confirmed" | "Dismissed" | "NoViolation" | "InsufficientEvidence", notes: string): Observable<void> {
-    return this.http.patch<void>(`${this.apiUrl}/${id}/review`, { decision, notes });
+  markAsReviewed(id: number, decision: "Confirmed" | "Dismissed" | "NoViolation" | "InsufficientEvidence", notes: string, expectedVersion?: string): Observable<void> {
+    return this.http.patch<void>(`${this.apiUrl}/${id}/review`, { decision, notes, expectedVersion });
   }
 
   getVideoChunks(sessionId: string | number, stream: "camera" | "screen" = "camera"): Observable<VideoChunkDto[]> {

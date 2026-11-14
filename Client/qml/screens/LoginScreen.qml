@@ -113,7 +113,7 @@ Page {
                 loginPage.errorText = ""
                 loginBtn.text    = "Входимо..."
                 loginBtn.enabled = false
-                if (!ExamVM.configureServer(serverAddress.text)) { errorText = "Некоректна адреса сервера"; loginBtn.enabled = true; return }
+                if (!ExamVM.configureServer(serverAddress.text)) { errorText = "Укажіть HTTPS-адресу сервера. HTTP доступний лише для локального DEV."; loginBtn.enabled = true; return }
                 ExamVM.login(username.text, password.text)
             }
         }

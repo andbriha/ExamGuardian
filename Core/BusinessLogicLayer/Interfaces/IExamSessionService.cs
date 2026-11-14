@@ -16,6 +16,6 @@ public interface IExamSessionService
     Task<ExamSessionDto> SaveAnswersAsync(Guid studentId, int sessionId, Dictionary<int, int> answers, string clientId);
     Task<ExamSessionDto> HeartbeatAsync(Guid studentId, int sessionId, string clientId);
     Task<ExamSessionDto> TerminateAsync(int sessionId);
-    Task<ExamSessionDto> ReviewSessionAsync(int sessionId, Guid reviewerId, string verdict, string notes);
+    Task<ExamSessionDto> ReviewSessionAsync(int sessionId, Guid reviewerId, string verdict, string notes, string expectedVersion);
 
 }

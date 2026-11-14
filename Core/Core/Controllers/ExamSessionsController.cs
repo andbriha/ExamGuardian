@@ -95,10 +95,11 @@ public class ExamSessionsController(IExamSessionService sessions, SessionAccess 
     [HttpPost("{id:int}/review"), Authorize(Roles = SystemRoles.Examiner)]
     public async Task<IActionResult> Review(int id, SessionReview request) {
         if (!await access.CanReadAsync(User,id)) return NotFound();
-        try { return Ok(await sessions.ReviewSessionAsync(id,SessionAccess.UserId(User),request.Verdict,request.Notes)); }
+        if (string.IsNullOrEmpty(request.ExpectedVersion)) return StatusCode(428, new {message="Оновіть спробу перед рішенням."});
+        try { return Ok(await sessions.ReviewSessionAsync(id,SessionAccess.UserId(User),request.Verdict,request.Notes,request.ExpectedVersion)); }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return Conflict(new { message = ex.Message }); }
     }
 }
 
-public record SessionReview(string Verdict, string Notes);
+public record SessionReview(string Verdict, string Notes, string? ExpectedVersion);

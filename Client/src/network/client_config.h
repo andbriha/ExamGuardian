@@ -1,6 +1,7 @@
 #pragma once
 #include <QSettings>
 #include <QString>
+#include "server_connection_policy.h"
 
 inline QString clientServerUrl() {
     const QString environmentUrl = qEnvironmentVariable("EXAMGUARDIAN_URL");
@@ -8,9 +9,9 @@ inline QString clientServerUrl() {
 #ifdef EXAMGUARDIAN_DEVELOPMENT
 "http://127.0.0.1:8081"
 #else
-"http://localhost"
+"https://localhost"
 #endif
 ).toString() : environmentUrl;
     while (url.endsWith('/')) url.chop(1);
-    return url;
+    return allowedClientOrigin(QUrl(url)) ? url : QStringLiteral("blocked://invalid-server");
 }

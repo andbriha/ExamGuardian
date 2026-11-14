@@ -14,6 +14,8 @@ This is a pilot implementation. Model accuracy, resistance to recorded-video att
 
 An observation is a reason to inspect context, not a calibrated probability of cheating. The system does not implement SignalR/WebSocket video, automatic integrity scoring, micro-earpiece recognition, speaker attribution, immutable PDF signing or LMS/CSV export. The printable report uses the browser print dialog.
 
+Security changes and deployment requirements: [SECURITY_HARDENING_2026-11-14.md](SECURITY_HARDENING_2026-11-14.md).
+
 ## Documentation
 
 The documentation site separates system overview (`/`), launch instructions (`/start`), examiner workflow (`/guide`), architecture (`/dev`), and a reference map (`/docs`). Start development below to serve it locally. Source: [web-site/README.md](web-site/README.md).

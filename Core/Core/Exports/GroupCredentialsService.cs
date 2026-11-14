@@ -8,10 +8,11 @@ using Core.Security;
 
 namespace Core.Exports;
 
-public sealed class GroupCredentialsService(AppDbContext db, IssuedCredentials credentials, GroupPdfWriter pdf)
+public sealed class GroupCredentialsService(AppDbContext db, IssuedCredentials credentials, GroupPdfWriter pdf, RosterAccess access)
 {
-    public async Task<byte[]> Export(string group, Guid[]? confirmedStudents, string format = "csv")
+    public async Task<byte[]> Export(Guid examiner, string group, Guid[]? confirmedStudents, string format = "csv")
     {
+        if (!await access.CanGroup(examiner, group)) throw new UnauthorizedAccessException();
         if (format is not ("csv" or "pdf")) throw new InvalidOperationException("Невідомий формат документа.");
         await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
         var students = await db.Users.Where(u => u.Role == SystemRoles.Student && (u.Group ?? "") == group)

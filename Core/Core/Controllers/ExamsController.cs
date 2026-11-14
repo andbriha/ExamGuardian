@@ -16,15 +16,16 @@ public class ExamsController : ControllerBase
 {
     private readonly IExamService _examService;
     private readonly SessionAccess _access;
+    private readonly RosterAccess _roster;
     private readonly IExamSessionService _sessionService;
 
     public ExamsController(
         IExamService examService,
-        IExamSessionService sessionService, SessionAccess access)
+        IExamSessionService sessionService, SessionAccess access, RosterAccess roster)
     {
         _examService = examService;
         _sessionService = sessionService;
-        _access = access;
+        _access = access; _roster = roster;
     }
 
     // Студент і викладач можуть отримати список доступних іспитів
@@ -58,6 +59,7 @@ public class ExamsController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateExamDto dto)
     {
         dto.CreatorId = SessionAccess.UserId(User);
+        if (!await _roster.CanGroup(dto.CreatorId, dto.AllowedGroup?.Trim())) return Forbid();
 
         try
         {

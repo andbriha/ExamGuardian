@@ -1,5 +1,6 @@
 import os
 os.environ.setdefault("OPENCV_IO_MAX_IMAGE_PIXELS", "16000000")
+from api.auth import close_auth_clients
 from core.model_integrity import verify_weights
 import cv2
 import numpy as np
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI):
         with suppress(asyncio.CancelledError):
             await worker
         liveness._detector.close()
+        await close_auth_clients()
 
 app = FastAPI(
     title       = "Inference API",

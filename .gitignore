@@ -80,3 +80,7 @@ $RECYCLE.BIN/
 # Legacy local downloads; both flavors are now published in Landing/.
 Landing.dev/
 Landing/*.tmp
+
+# Runtime signing material
+**/access-signing.pem
+**/credential-keys/

@@ -9,6 +9,7 @@ public sealed class DeadlineWorker(IServiceScopeFactory scopes, ILogger<Deadline
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var nextAuthCleanup = DateTime.MinValue;
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
@@ -18,6 +19,10 @@ public sealed class DeadlineWorker(IServiceScopeFactory scopes, ILogger<Deadline
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var sessions = scope.ServiceProvider.GetRequiredService<IExamSessionService>();
                 var cutoff = DateTime.UtcNow;
+                if (cutoff >= nextAuthCleanup) {
+                    await db.AuthSessions.Where(s => s.ExpiresAt < cutoff).ExecuteDeleteAsync(stoppingToken);
+                    nextAuthCleanup = cutoff.AddHours(1);
+                }
                 var expired = await db.Sessions.AsNoTracking().Where(s => !s.IsFinished && s.DeadlineUtc < cutoff && s.ExamSnapshotJson != null)
                     .Select(s => new { s.Id, s.StudentId, s.ExamId }).Take(50).ToListAsync(stoppingToken);
                 foreach (var s in expired)

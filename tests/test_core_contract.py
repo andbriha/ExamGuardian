@@ -28,12 +28,18 @@ def jwt_token(claims, key=KEY):
     def encode(value):
         return base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).rstrip(b"=")
     content = encode({"alg": "HS256", "typ": "JWT"}) + b"." + encode(claims)
-    signature = base64.urlsafe_b64encode(hmac.new(key.encode(), content, hashlib.sha256).digest()).rstrip(b"=")
+    signature = base64.urlsafe_b64encode(hmac.new(hmac.new(b"examguardian-integration-test-ai-key", b"admission:v1", hashlib.sha256).digest() if claims.get("aud") == "ExamGuardianAdmission" else key.encode(), content, hashlib.sha256).digest()).rstrip(b"=")
     return (content + b"." + signature).decode()
 
 CAPABILITIES = {}
 
 def request(path, method="GET", data=None, token=None, content_type="application/json", capabilities=True, extra_headers=None):
+    if method == "PATCH" and path.startswith('/api/Violations/') and path.endswith('/review') and isinstance(data,dict) and token and 'expectedVersion' not in data:
+        status, observation = request(path.removesuffix('/review'),token=token)
+        if status == 200: data = {**data,'expectedVersion':observation['reviewVersion']}
+    if method == "POST" and path.startswith('/api/ExamSessions/') and path.endswith('/review') and isinstance(data,dict) and token and 'expectedVersion' not in data:
+        status, attempt = request(path.removesuffix('/review'),token=token)
+        if status == 200: data = {**data,'expectedVersion':attempt['reviewVersion']}
     body = json.dumps(data).encode() if data is not None and not isinstance(data, bytes) else data
     headers = {"Content-Type": content_type}
     if token: headers["Authorization"] = "Bearer " + token
@@ -116,11 +122,24 @@ class CoreContracts(unittest.TestCase):
         self.assertEqual(rows[0]['username'], login)
         self.assertGreaterEqual(len(rows[0]['password']), 12)
         self.assertEqual(request('/api/Auth/login', 'POST', {'login':login,'password':old_password})[0],401)
-        self.assertEqual(request('/api/Auth/login', 'POST', {'login':login,'password':rows[0]['password']})[0],200)
+        status, fresh = request('/api/Auth/login', 'POST', {'login':login,'password':rows[0]['password']})
+        self.assertEqual(status,200)
+        self.assertEqual(request('/api/Auth/me',token=token)[0],401)
+        self.students[0]=(student_id,fresh['response']['accessToken'],login,rows[0]['password'])
         other = self.students[1]
         self.assertEqual(request('/api/Auth/login', 'POST', {'login':other[2],'password':other[3]})[0],200)
         self.assertEqual(self.start()[0],200)
         self.assertEqual(request(path, 'POST', {'group':group,'studentIds':[student_id]}, self.teacher)[0],409)
+
+    def test_stale_observation_review_is_rejected(self):
+        status,session=self.start(); self.assertEqual(status,200)
+        status,event=request('/api/Violations','POST',{'eventId':str(uuid4()),'examSessionId':session['id'],'violationType':'cell_phone','confidence':0.9,'relativeTimestampSeconds':2},extra_headers={'X-Api-Key':'examguardian-integration-test-ai-key'})
+        self.assertEqual(status,201,event)
+        path=f"/api/Violations/{event['id']}/review"
+        version=event['reviewVersion']
+        self.assertEqual(request(path,'PATCH',{'decision':'NoViolation','notes':'Allowed object','expectedVersion':version},self.teacher)[0],204)
+        self.assertEqual(request(path,'PATCH',{'decision':'Confirmed','notes':'Stale decision','expectedVersion':version},self.teacher)[0],409)
+        self.assertEqual(request(path.removesuffix('/review'),token=self.teacher)[1]['reviewDecision'],'NoViolation')
 
     def test_qti_preview_validates_package_and_does_not_create_exam(self):
         xml = (Path(__file__).parent / 'fixtures/qti-single-choice.xml').read_bytes()
@@ -194,7 +213,7 @@ class CoreContracts(unittest.TestCase):
         self.assertEqual(request(f"/api/Exams/{self.exam['id']}/grades?group=", token=self.teacher)[0],200)
 
         other_teacher = jwt_token({'id':str(uuid4()), 'role':'Examiner','iss':'ExamGuardianTest','aud':'ExamGuardianTestClient','exp':int(time.time())+120})
-        self.assertEqual(request(export, token=other_teacher)[0], 404)
+        self.assertEqual(request(export, token=other_teacher)[0], 401)
         sql(f"""UPDATE "Sessions" SET "EvidenceStatus"='Expired' WHERE "Id"={sid};""")
         self.assertEqual(request(export, token=self.teacher)[0], 200)
 
@@ -372,7 +391,7 @@ class CoreContracts(unittest.TestCase):
         sid=session["id"]
         alien=jwt_token({"id":str(uuid4()),"sub":str(uuid4()),"role":"Examiner","iss":"ExamGuardianTest","aud":"ExamGuardianTestClient","exp":int(time.time())+60})
         for path in [f"/api/ExamSessions/{sid}",f"/api/Exams/{self.exam['id']}",f"/api/video/{sid}/chunks"]:
-            self.assertEqual(request(path,token=alien)[0],404)
+            self.assertEqual(request(path,token=alien)[0],401)
         _, visible=request(f"/api/ExamSessions/{sid}",token=self.teacher)
         self.assertNotIn("attemptToken",visible)
         self.assertNotIn("evidenceToken",visible)
