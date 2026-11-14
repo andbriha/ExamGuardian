@@ -1,0 +1,41 @@
+using Core.Importing.Students;
+using Core.Documents;
+using Core.Exports;
+using Core.Security;
+using DataAccessLayer.Entities;
+using Microsoft.AspNetCore.DataProtection;
+
+static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
+Check(BusinessLogicLayer.Services.ObservationPolicy.IsCleared("NoViolation"), "Real but innocent events permit acceptance");
+Check(!BusinessLogicLayer.Services.ObservationPolicy.IsCleared("InsufficientEvidence"), "Unknown events cannot become cleared");
+Check(BusinessLogicLayer.Services.ObservationPolicy.Priority("cell_phone") == "Warning", "Object evidence is a warning");
+Check(BusinessLogicLayer.Services.ObservationPolicy.EpisodeRevision("{\"episode\":{\"revision\":2}}") == 2, "Episode revisions support idempotent updates");
+var rows = RosterParser.Parse("full_name;username\r\n\"Коваль, Марія\";mary\r\nAlex Smith;\r\n");
+Check(rows.Count == 2 && rows[0].FullName == "Коваль, Марія" && rows[1].Login == "", "CSV quotes/empty login");
+Check(RosterParser.Parse("ПІБ\tЛогін\nМарія Коваль\tmary")[0].Login == "mary", "Excel paste");
+Check(RosterParser.Parse("One Student\nTwo Student").Count == 2, "name-only list");
+Check(RosterParser.Parse("Student Name;=FORMULA")[0].Error is not null, "bad login");
+try { RosterParser.Parse(string.Join('\n', Enumerable.Repeat("Student Name", 201))); throw new Exception("accepted too many"); } catch (ArgumentException) {}
+var student = new User {Id=Guid.NewGuid()};
+var credentials = new IssuedCredentials(new EphemeralDataProtectionProvider());
+credentials.Issue(student); var password = credentials.Read(student);
+Check(password is not null && !student.IssuedPasswordProtected!.Contains(password), "protected credential");
+Check(credentials.Read(student) == password, "read must not rotate");
+student.PasswordHash = BCrypt.Net.BCrypt.HashPassword("changed-by-student");
+Check(credentials.Read(student) is null, "never show stale password");
+var session = new ExamSession {ExamSnapshotJson="""{"Questions":[{"Id":1,"Points":2,"CorrectIndex":0,"ReportCategory":"Аудіювання"},{"Id":2,"Points":3,"CorrectIndex":1,"ReportCategory":"Аудіювання"},{"Id":3,"Points":5,"CorrectIndex":0,"ReportCategory":"Відповідність"}]}""", SavedAnswersJson="""{"1":0,"2":0,"3":0}"""};
+var breakdown=GroupResultsService.Breakdown(session);
+Check(breakdown.Single(c=>c.Category=="Аудіювання").Earned==2 && breakdown.Single(c=>c.Category=="Аудіювання").Maximum==5,"sum raw points, not percent");
+session.QuestionScoresJson="""{"1":1,"2":2,"3":4}""";
+Check(GroupResultsService.Breakdown(session).Sum(c=>c.Earned)==7,"future partial credit uses stored marks");
+session.ExamSnapshotJson="""{"Questions":[{"Id":1,"Points":5,"ReportCategory":"Future type"}]}""";
+session.SavedAnswersJson="future answer format";
+Check(GroupResultsService.Breakdown(session).Single().Earned==1,"stored marks are independent of question/answer format");
+session.ExamSnapshotJson="invalid"; Check(GroupResultsService.Breakdown(session).Length==0,"legacy missing snapshot");
+PdfSharp.Fonts.GlobalFontSettings.FontResolver = new DocumentFonts();
+var writer = new GroupPdfWriter();
+var output = Path.GetFullPath(args.FirstOrDefault() ?? "output/pdf");Directory.CreateDirectory(output);
+var names = Enumerable.Range(1,42).Select(i=>i%3==0 ? $"Ковальчук-Стефаненко Олександра Володимирівна {i:00}" : $"Student Example {i:00}").ToArray();
+File.WriteAllBytes(Path.Combine(output,"sample-group-credentials.pdf"),writer.Credentials("DEMO - КН-21",names.Select((n,i)=>new CredentialLine(n,$"student-{i:000}",i==41?null:"DEMO-NOT-A-LOGIN")).ToArray()));
+File.WriteAllBytes(Path.Combine(output,"sample-group-results.pdf"),writer.Results(new("DEMO - КН-21","Демонстрація групової відомості",123,names.Select((n,i)=>new StudentResult(n,i%4==0?"На перевірці":"Підтверджено",i%4==0?null:80,i%4==0?[]:[new("Аудіювання (демонстраційна категорія)",5,5),new("Відповідність (демонстраційна категорія)",3,5)],i)).ToArray())));
+Console.WriteLine("Workflow checks passed; multi-page PDF fixtures generated.");

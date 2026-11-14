@@ -27,7 +27,7 @@ def connect():
 
 def enqueue(event_id: str, payload: dict):
     with connect() as db:
-        db.execute("INSERT OR IGNORE INTO outbox(id,payload) VALUES (?,?)", (event_id, json.dumps(payload)))
+        db.execute("INSERT INTO outbox(id,payload) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, attempts=0, next_try=0, error=NULL, dead=0", (event_id, json.dumps(payload)))
 
 def should_emit(session: int, kind: str) -> bool:
     now = time.time()
@@ -46,19 +46,21 @@ async def delivery_loop():
         while True:
             with connect() as db:
                 pending = db.execute("SELECT id,payload,attempts FROM outbox WHERE dead=0 AND next_try<=? ORDER BY next_try LIMIT 20", (time.time(),)).fetchall()
+                if db.execute("SELECT 1 FROM sqlite_master WHERE name='audio_windows'").fetchone():
+                    db.execute("DELETE FROM audio_windows WHERE touched<?", (time.time()-60,))
             for event_id, payload, attempts in pending:
                 error, dead = None, False
                 try:
                     response = await client.post(settings.core_api_url, json=json.loads(payload), headers={"X-Api-Key": settings.ai_api_key})
                     if response.status_code < 300:
-                        with connect() as db: db.execute("DELETE FROM outbox WHERE id=?", (event_id,))
+                        with connect() as db: db.execute("DELETE FROM outbox WHERE id=? AND payload=?", (event_id, payload))
                         continue
                     error = f"HTTP {response.status_code}"
                     dead = response.status_code in (400, 401, 403, 404, 422)
                 except httpx.HTTPError as exc:
                     error = type(exc).__name__
                 with connect() as db:
-                    db.execute("UPDATE outbox SET attempts=?,next_try=?,error=?,dead=? WHERE id=?", (attempts+1,time.time()+min(60,2**min(attempts,6)),error,int(dead),event_id))
+                    db.execute("UPDATE outbox SET attempts=?,next_try=?,error=?,dead=? WHERE id=? AND payload=?", (attempts+1,time.time()+min(60,2**min(attempts,6)),error,int(dead),event_id,payload))
                 logger.warning("Observation %s delivery failed: %s", event_id, error)
             await asyncio.sleep(1)
 

@@ -33,12 +33,14 @@ services:
       - AiService__ApiKey=${AiService__ApiKey}
       - INFERENCE_IMAGES_PATH=/app/InferenceImages
       - EXAM_VIDEO_PATH=/app/ExamVideos
+      - CredentialKeysPath=/app/credential-keys
       - Bootstrap__ExaminerLogin=${BOOTSTRAP_EXAMINER_LOGIN:-}
       - Bootstrap__ExaminerPassword=${BOOTSTRAP_EXAMINER_PASSWORD:-}
       - Seed__DemoExam=${SEED_DEMO_EXAM:-false}
     volumes:
       - shared_images:/app/InferenceImages
       - exam_videos:/app/ExamVideos
+      - credential_keys:/app/credential-keys
     networks:
       - app_network
     restart: unless-stopped
@@ -67,6 +69,8 @@ services:
       - JWT__ISSUER=${JWT__ISSUER}
       - JWT__AUDIENCE=${JWT__AUDIENCE}
       - INFERENCE_IMAGES_PATH=/app/images
+      - INFERENCE_QUEUE_LIMIT=${INFERENCE_QUEUE_LIMIT:-16}
+      - INFERENCE_WAIT_SECONDS=${INFERENCE_WAIT_SECONDS:-5}
     volumes:
       - shared_images:/app/images
       - deepface_cache:/root/.deepface
@@ -107,6 +111,7 @@ services:
         condition: service_healthy
 
 volumes:
+  credential_keys:
   exam_videos:
   postgres_data:
   shared_images:

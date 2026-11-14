@@ -11,23 +11,23 @@
       <span class="tb-exam">{{ studentInfo.examName }} · {{ studentInfo.group }}</span>
     </div>
     <div class="tb-right">
-      <div class="pill pill-red">
-        <div style="width:6px;height:6px;border-radius:50%;background:#ef4444"></div>
-        Порушення #{{ violationId }}
+      <div class="pill observation-priority" [attr.data-priority]="currentViolation ? observationPriority(currentViolation) : 'Observation'">
+        Спостереження #{{ violationId }}
       </div>
-      <div class="pill pill-green">AI Core активний</div>
       <div class="avatar">{{ studentInfo.initials }}</div>
     </div>
   </div>
   
   <div class="breadcrumb">
-    <a href="javascript:void(0)" (click)="goBack()">← Назад до моніторингу</a>
+    <a *ngIf="sessionExamId && currentViolation; else historyBack" [routerLink]="['/monitor', sessionExamId]" [queryParams]="{session: currentViolation.examSessionId}">← До цієї спроби</a>
+    <ng-template #historyBack><button (click)="goBack()">← Назад</button></ng-template>
     <span>›</span>
     <span class="muted">{{ studentInfo.name }}</span>
     <span>›</span>
-    <span style="color:#991b1b;font-weight:600">Детальний розбір відеофіксації</span>
+    <span style="color:#475569;font-weight:600">Детальний розбір відеофіксації</span>
   </div>
   
+  <p *ngIf="reviewError" role="alert">{{ reviewError }}</p>
   <div class="content">
     <div style="display:flex;flex-direction:column;gap:16px">
       <div class="card">
@@ -36,19 +36,23 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Відеозапис сесії тестування
           </div>
-          <span class="badge-danger" *ngIf="currentViolation">{{ getViolationLabel(currentViolation.violationType) }}</span>
+          <span *ngIf="currentViolation">{{ getViolationLabel(currentViolation.violationType) }}</span>
         </div>
         <div class="card-body">
           
+          <div class="stream-selector">
+            <button [disabled]="reviewing" [attr.aria-pressed]="selectedStream === 'camera'" (click)="changeStream('camera')">Камера</button>
+            <button [disabled]="reviewing" [attr.aria-pressed]="selectedStream === 'screen'" (click)="changeStream('screen')">Екран</button>
+          </div>
           <!-- Chunk Selector (if multiple chunks exist) -->
           <div class="chunk-selector" *ngIf="videoChunks.length > 1">
-            <span class="cs-label">Відео-фрагменти (по 60 сек):</span>
+            <span class="cs-label">Записані фрагменти:</span>
             <div class="cs-list">
               @for (chunk of videoChunks; track chunk.chunkIndex) {
                 <button class="cs-btn" 
                         [class.active]="selectedChunkIndex === chunk.chunkIndex"
                         (click)="selectChunk(chunk.chunkIndex)">
-                  Чанк #{{ chunk.chunkIndex }} ({{ (chunk.chunkIndex - 1) * 60 }}с – {{ chunk.chunkIndex * 60 }}с)
+                  Фрагмент {{ chunk.chunkIndex }} · {{ chunk.metadata?.startOffsetSeconds != null ? formatTime(chunk.metadata!.startOffsetSeconds!) : 'Час невідомий' }}
                 </button>
               }
             </div>
@@ -140,7 +144,7 @@
           <!-- Violations Timeline List / Keyframes -->
           <div style="margin-top: 24px;">
             <p style="font-size: 13px; color: #475569; margin-bottom: 10px; font-weight: 600;">
-              📌 Хронологія зафіксованих порушень у цій сесії ({{ sessionViolations.length }})
+              📌 Хронологія спостережень у цій сесії ({{ sessionViolations.length }})
             </p>
             
             <div class="violations-table-wrap">
@@ -148,9 +152,9 @@
                 <thead>
                   <tr>
                     <th>Таймкод</th>
-                    <th>Тип порушення</th>
-                    <th>Впевненість ШІ</th>
-                    <th>Фрагмент (Чанк)</th>
+                    <th>Тип спостереження</th>
+                    <th>Оцінка моделі</th>
+                    <th>Час у спробі</th>
                     <th>Дія</th>
                   </tr>
                 </thead>
@@ -158,7 +162,7 @@
                   @for (v of sessionViolations; track v.id) {
                     <tr [class.highlight]="activeMarker?.id === v.id">
                       <td>
-                        <span class="tc-badge">{{ formatTime(v.relativeTimestampSeconds) }}</span>
+                        <span class="tc-badge">{{ formatTime(v.relativeTimestampSeconds) }}</span><br>{{ decisionLabel(v.reviewDecision) }}
                       </td>
                       <td>
                         <strong>{{ getViolationLabel(v.violationType) }}</strong>
@@ -182,7 +186,7 @@
                   @if (sessionViolations.length === 0) {
                     <tr>
                       <td colspan="5" style="text-align: center; color: #10b981; padding: 20px;">
-                        ✔️ У цій сесії порушень не зафіксовано.
+                        Спостережень у цій сесії немає. Це не замінює перевірку доступності записів.
                       </td>
                     </tr>
                   }
@@ -213,8 +217,8 @@
               <span class="info-val">{{ studentInfo.examName }}</span>
             </div>
             <div class="info-row">
-              <span class="info-key">Порушень у сесії</span>
-              <span class="info-val red">{{ sessionViolations.length }}</span>
+              <span class="info-key">Спостережень у сесії</span>
+              <span class="info-val">{{ sessionViolations.length }}</span>
             </div>
             <div class="info-row" *ngIf="currentViolation">
               <span class="info-key">Час інциденту</span>
@@ -226,8 +230,8 @@
   
       <div class="card" *ngIf="currentViolation">
         <div class="card-header">
-          <div class="card-title">AI Аналіз інциденту</div>
-          <span class="badge-danger">#{{ currentViolation.id }}</span>
+          <div class="card-title">Перевірка спостереження</div>
+          <span class="observation-priority" [attr.data-priority]="observationPriority(currentViolation)">{{ priorityLabel(currentViolation) }}</span>
         </div>
         <div class="card-body">
           <div class="confidence-bar" *ngIf="currentViolation && ['cell_phone','book','laptop'].includes(currentViolation.violationType)">
@@ -240,20 +244,38 @@
             </div>
           </div>
   
-          <label>Підстава рішення<textarea #notes maxlength="2000" (input)="reviewNotes = notes.value" placeholder="Пояснення для протоколу"></textarea></label>
+          <label>Підстава рішення<textarea #notes maxlength="2000" [(ngModel)]="reviewNotes" [disabled]="reviewing" placeholder="Пояснення для протоколу"></textarea></label>
           <p *ngIf="reviewError" role="alert">{{ reviewError }}</p>
           <section *ngIf="currentViolation.violationType === 'voice_activity'">
             <p>Виявлено мовлення. Особу мовця не встановлено. Це не доказ підказки: прослухайте запис у контексті та обґрунтуйте рішення.</p>
             <p *ngIf="speechTranscript">Автоматична розшифровка (можливі помилки): «{{ speechTranscript }}»</p>
             <p *ngIf="!speechTranscript">Розшифровка недоступна. Перевірте оригінальний звук запису.</p>
           </section>
-          <p>Рішення: {{ currentViolation.reviewDecision }}</p>
+          <p>{{ episodeLabel(currentViolation) }}</p><p>Чернетки пояснень зберігаються окремо для кожного спостереження під час роботи на цій сторінці.</p>
+          <p>Рішення: {{ decisionLabel(currentViolation.reviewDecision) }}</p>
+          <p>Факт появи предмета не доводить порушення. Перевірте правила іспиту та запис до й після події.</p>
           <img *ngIf="evidenceImageUrl" [src]="evidenceImageUrl" alt="Кадр, за яким сформовано сигнал" style="max-width:100%">
           <p *ngIf="evidenceError" role="alert">{{ evidenceError }}</p>
+          <p><strong>Рішення стосується #{{ currentViolation.id }} · {{ formatTime(currentViolation.relativeTimestampSeconds) }} · {{ getViolationLabel(currentViolation.violationType) }}</strong></p>
+          <label>Висновок щодо цього спостереження
+            <select [(ngModel)]="selectedDecision" [disabled]="reviewing">
+              <option value="">Оберіть рішення</option>
+              <option value="Dismissed">Помилка розпізнавання</option>
+              <option value="NoViolation">Подія була, порушення немає</option>
+              <option value="InsufficientEvidence">Недостатньо даних — очікує матеріалів</option>
+              <option value="Confirmed">Порушення підтверджено</option>
+            </select>
+          </label>
+          <p *ngIf="selectedDecision === 'Confirmed'">Вкажіть заборонену дію та відповідне правило. Це рішення не змінює академічний бал.</p>
+          <p *ngIf="selectedDecision === 'InsufficientEvidence'">Укажіть, яких матеріалів бракує. Спостереження залишиться відкритим для перевірки.</p>
+          <p role="status" *ngIf="reviewSuccess">{{ reviewSuccess }}</p>
           <div class="action-btns">
-            <button class="btn btn-danger" [disabled]="reviewing" (click)="confirmViolation()">Підтвердити порушення</button>
-            <button class="btn btn-ghost" [disabled]="reviewing" (click)="rejectViolation()">Відхилити (хибне спрацювання)</button>
+            <button class="btn btn-ghost" [disabled]="reviewing || !selectedDecision || !reviewNotes.trim()" (click)="saveSelected()">Зберегти рішення</button>
+            <button class="btn btn-ghost" [disabled]="reviewing || !selectedDecision || !reviewNotes.trim()" (click)="saveSelected(true)">Зберегти й наступне</button>
           </div>
+          <details><summary>Попередні рішення</summary>
+            @for (entry of reviewHistory; track $index) { <p>{{ entry.at | date:'medium' }} · {{ decisionLabel(entry.decision) }} · {{ entry.reviewerId }}<br>{{ entry.notes }}</p> }
+          </details>
         </div>
       </div>
     </div>

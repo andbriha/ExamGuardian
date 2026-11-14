@@ -6,3 +6,4 @@ obj
 Core/ExamVideos/
 Core/InferenceImages/
 .env*
+**/state/

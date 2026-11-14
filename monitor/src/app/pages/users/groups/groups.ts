@@ -1,14 +1,15 @@
 import { Component, ChangeDetectorRef, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { RouterLink, ActivatedRoute } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { GroupService } from '../../../services/group.service';
+import { GroupCredentialsComponent } from '../group-credentials/group-credentials';
 import { StudentService, StudentDto } from '../../../services/student.service';
 
 @Component({
   selector: 'app-groups', standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, GroupCredentialsComponent],
   templateUrl: './groups.html', styleUrl: './groups.css'
 })
 export class GroupsComponent implements OnInit {
@@ -17,7 +18,7 @@ export class GroupsComponent implements OnInit {
   name = ''; selected = ''; studentId = '';
   loading = true; saving = false; assigning = false;
   error = ''; success = '';
-  constructor(private service: GroupService, private studentService: StudentService, private cdr: ChangeDetectorRef) {}
+  constructor(private service: GroupService, private studentService: StudentService, private cdr: ChangeDetectorRef, route: ActivatedRoute) { this.selected = route.snapshot.queryParamMap.get('group') || ''; }
   ngOnInit() { this.load(); }
   load() {
     this.loading = true; this.error = '';

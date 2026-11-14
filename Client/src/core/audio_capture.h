@@ -6,6 +6,7 @@
 #include <QtEndian>
 #include <cstring>
 #include <algorithm>
+#include "pcm_resampler.h"
 
 // PCM for VAD is separate from the microphone track in the evidence recording.
 class AudioCapture : public QObject {
@@ -18,6 +19,10 @@ public:
         const auto device = QMediaDevices::defaultAudioInput();
         if (device.isNull()) { emit unavailable("Мікрофон недоступний"); return; }
         m_format = device.preferredFormat();
+        if (m_format.sampleRate() <= 0 || m_format.channelCount() <= 0 || m_format.sampleFormat() == QAudioFormat::Unknown) {
+            emit unavailable("Формат мікрофона не підтримується"); return;
+        }
+        m_resampler.reset(m_format.sampleRate());
         m_source = new QAudioSource(device,m_format,this);
         auto *input = m_source->start();
         if (!input) { stop(); emit unavailable("Не вдалося відкрити аудіоканал"); return; }
@@ -29,9 +34,9 @@ public:
             m_buffer += input->readAll();
             const int bytesPerBatch = m_format.sampleRate()*m_format.bytesPerFrame()*m_batchSeconds;
             while (bytesPerBatch > 0 && m_buffer.size() >= bytesPerBatch) {
-                QByteArray pcm; pcm.resize(16000*m_batchSeconds*2);
-                for (int n=0; n<16000*m_batchSeconds; ++n) {
-                    const int sourceFrame = qint64(n)*m_format.sampleRate()/16000;
+                const int sourceFrames = m_format.sampleRate()*m_batchSeconds;
+                std::vector<float> mono(sourceFrames);
+                for (int sourceFrame=0; sourceFrame<sourceFrames; ++sourceFrame) {
                     float sample=0;
                     for (int c=0; c<m_format.channelCount(); ++c) {
                         const char *data=m_buffer.constData()+sourceFrame*m_format.bytesPerFrame()+c*m_format.bytesPerSample();
@@ -43,7 +48,12 @@ public:
                         default: break;
                         }
                     }
-                    const qint16 value = qToLittleEndian(static_cast<qint16>(std::clamp(sample/m_format.channelCount(),-1.0f,0.9999f)*32768));
+                    mono[sourceFrame] = std::isfinite(sample) ? sample/m_format.channelCount() : 0.0f;
+                }
+                const auto resampled=m_resampler.process(mono);
+                QByteArray pcm; pcm.resize(resampled.size()*2);
+                for (size_t n=0; n<resampled.size(); ++n) {
+                    const qint16 value = qToLittleEndian(static_cast<qint16>(std::clamp(resampled[n],-1.0f,0.9999f)*32768));
                     std::memcpy(pcm.data()+n*2,&value,2);
                 }
                 m_buffer.remove(0,bytesPerBatch);
@@ -59,6 +69,7 @@ signals:
 private:
     QAudioSource *m_source=nullptr;
     QAudioFormat m_format;
+    PcmResampler m_resampler;
     QByteArray m_buffer;
     QElapsedTimer m_clock;
     int m_offset=0;

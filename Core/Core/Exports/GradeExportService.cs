@@ -19,7 +19,7 @@ public sealed class GradeExportService(SessionAccess access)
         if (examId.HasValue) query = query.Where(s => s.ExamId == examId);
         var rows = await query.Select(s => new GradeRow(s.Id, s.ExamId, s.Exam.Title, s.StartTime,
             s.StudentId, s.Student.Login, s.Student.Group ?? "", s.IsFinished, s.Status, s.Score,
-            s.IntegrityVerdict, s.EvidenceStatus, s.Violations.Any(v => v.ReviewDecision != "Dismissed"), s.AdmissionId != null && s.AdmissionId.StartsWith("dev_"))).ToListAsync();
+            s.IntegrityVerdict, s.EvidenceStatus, s.Violations.Any(v => v.ReviewDecision != "Dismissed" && v.ReviewDecision != "NoViolation"), s.AdmissionId != null && s.AdmissionId.StartsWith("dev_"))).ToListAsync();
         return rows.GroupBy(s => new { s.ExamId, s.StudentId }).Select(g => g.OrderByDescending(s => s.StartTime).ThenByDescending(s => s.Id).First()).ToList();
     }
     public static string? BlockReason(GradeRow row)

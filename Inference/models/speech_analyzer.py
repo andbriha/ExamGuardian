@@ -2,17 +2,10 @@
 import json
 import logging
 import os
-import re
 from functools import lru_cache
 from pathlib import Path
 
-WORDS = ("сонце", "книга", "вода", "школа", "місто", "ранок", "небо", "дерево")
-
-
-def phrase_matches(text, phrase):
-    # Whole words in order; never substring or fuzzy matches for admission.
-    normalize = lambda s: re.findall(r"[^\W\d_]+", s.casefold(), re.UNICODE)
-    return normalize(text) == normalize(phrase)
+from core.speech_challenges import WORDS, phrase_matches
 
 
 class SpeechAnalyzer:
@@ -37,10 +30,13 @@ class SpeechAnalyzer:
         # A recognizer belongs to one request, never shared between students.
         recognizer = KaldiRecognizer(self.model, sample_rate)
         recognizer.SetWords(True)
-        recognizer.AcceptWaveform(pcm)
-        result = json.loads(recognizer.FinalResult())
-        words = result.get("result", [])
-        return {"transcript": result.get("text", ""),
+        segments = []
+        for offset in range(0, len(pcm), 8000):
+            if recognizer.AcceptWaveform(pcm[offset:offset + 8000]):
+                segments.append(json.loads(recognizer.Result()))
+        segments.append(json.loads(recognizer.FinalResult()))
+        words = [word for segment in segments for word in segment.get("result", [])]
+        return {"transcript": " ".join(segment.get("text", "") for segment in segments).strip(), "words": words,
                 "confidence": min((w.get("conf", 0) for w in words), default=0)}
 
 

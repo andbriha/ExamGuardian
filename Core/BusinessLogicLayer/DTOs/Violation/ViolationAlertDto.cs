@@ -5,6 +5,7 @@ namespace BusinessLayer.DTOs.Violation
         public int Id { get; set; }
         public int ExamSessionId { get; set; }
         public string ViolationType { get; set; } = null!;
+        public string Priority { get; set; } = "Observation";
         public double Confidence { get; set; }
         public int RelativeTimestampSeconds { get; set; }
         public string? EvidenceUrl { get; set; }

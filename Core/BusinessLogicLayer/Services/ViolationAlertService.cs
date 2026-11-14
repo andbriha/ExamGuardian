@@ -36,7 +36,7 @@ public class ViolationAlertService : IViolationAlertService
         return violations.Select(MapToDto);
     }
 
-    public async Task<IEnumerable<ViolationAlertDto>> GetUnreviewedForSessionsAsync(List<int> ids) => (await _db.Violations.AsNoTracking().Where(v => ids.Contains(v.ExamSessionId) && (v.ReviewDecision == "Pending" || v.ReviewDecision == "LegacyReviewed")).OrderBy(v => v.Timestamp).ToListAsync()).Select(MapToDto);
+    public async Task<IEnumerable<ViolationAlertDto>> GetUnreviewedForSessionsAsync(List<int> ids) => (await _db.Violations.AsNoTracking().Where(v => ids.Contains(v.ExamSessionId) && (v.ReviewDecision == "Pending" || v.ReviewDecision == "LegacyReviewed" || v.ReviewDecision == "InsufficientEvidence")).OrderBy(v => v.Timestamp).ToListAsync()).Select(MapToDto);
 
     public async Task<IEnumerable<ViolationAlertDto>> GetUnreviewedAsync()
     {
@@ -54,7 +54,19 @@ public class ViolationAlertService : IViolationAlertService
         await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(1,{dto.ExamSessionId})");
         if (dto.EventId != Guid.Empty && await _db.Violations.FirstOrDefaultAsync(v => v.EventId == dto.EventId) is { } existing)
         {
-            if (existing.ExamSessionId != dto.ExamSessionId) throw new ArgumentException("Event id belongs to another session.");
+            if (existing.ExamSessionId != dto.ExamSessionId || existing.ViolationType != dto.ViolationType) throw new ArgumentException("Event id belongs to another observation.");
+            if (ObservationPolicy.EpisodeRevision(dto.Metadata) > ObservationPolicy.EpisodeRevision(existing.Metadata))
+            {
+                existing.Metadata = dto.Metadata;
+                existing.Confidence = dto.Confidence;
+                // Preserve the first evidence frame and timestamp. New episode
+                // evidence invalidates a prior review, whose history is retained.
+                existing.ReviewDecision = "Pending"; existing.IsReviewed = false;
+                existing.ReviewedBy = null; existing.ReviewedAt = null; existing.ReviewNotes = null;
+                var owner = await _db.Sessions.FindAsync(dto.ExamSessionId);
+                if (owner is not null) owner.IntegrityVerdict = "UnderReview";
+                await _db.SaveChangesAsync();
+            }
             await transaction.CommitAsync(); return MapToDto(existing);
         }
         var sessionsRepo = (IExamSessionRepository)
@@ -89,7 +101,7 @@ public class ViolationAlertService : IViolationAlertService
 
     public async Task ReviewAsync(int violationId, Guid reviewerId, string decision, string? notes)
     {
-        if (decision is not ("Confirmed" or "Dismissed") || notes?.Length > 2000) throw new ArgumentException("Invalid review decision.");
+        if (!ObservationPolicy.ValidDecision(decision) || string.IsNullOrWhiteSpace(notes) || notes.Length > 2000) throw new ArgumentException("A review decision and its reason are required.");
         var v = await _db.Violations.FindAsync(violationId) ?? throw new KeyNotFoundException("Observation not found.");
         await using var transaction = await _db.Database.BeginTransactionAsync();
         await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock(1,{v.ExamSessionId})");
@@ -110,12 +122,13 @@ public class ViolationAlertService : IViolationAlertService
         Id = va.Id,
         ExamSessionId = va.ExamSessionId,
         ViolationType = va.ViolationType,
+        Priority = ObservationPolicy.Priority(va.ViolationType),
         Confidence = va.Confidence,
         RelativeTimestampSeconds = va.RelativeTimestampSeconds,
         EvidenceUrl = va.EvidenceUrl,
         Metadata = va.Metadata,
         Timestamp = va.Timestamp,
         IsReviewed = va.IsReviewed,
-        ReviewDecision = va.ReviewDecision, ReviewedBy = va.ReviewedBy, ReviewedAt = va.ReviewedAt, ReviewNotes = va.ReviewNotes, EventId = va.EventId,
+        ReviewDecision = va.ReviewDecision, ReviewedBy = va.ReviewedBy, ReviewedAt = va.ReviewedAt, ReviewNotes = va.ReviewNotes, ReviewHistoryJson = va.ReviewHistoryJson, EventId = va.EventId,
     };
 }

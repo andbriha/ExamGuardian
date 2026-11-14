@@ -132,6 +132,7 @@ export class ExamBuilderComponent implements OnInit {
       questions:       this.questions.map((q, i) => ({
         text:         q.text,
         points:       q.points,
+        reportCategory: q.reportCategory?.trim() || 'Тестові завдання',
         correctIndex: q.correctIndex,
         orderIndex:   i,
         options:      q.options.map(o => o.text),

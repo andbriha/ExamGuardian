@@ -68,6 +68,8 @@
           <div class="q-header-right">
             <label>Балів:</label>
             <input type="number" [(ngModel)]="q.points" min="1" max="10" class="points-input">
+            <label>Категорія у звіті <input [(ngModel)]="q.reportCategory" maxlength="80" placeholder="Тестові завдання"></label>
+            <small>Бали завдань з однаковою категорією підсумовуються в PDF. Категорія не змінює тип питання.</small>
             <button class="btn-icon btn-danger" 
                     (click)="removeQuestion(qIndex)" 
                     [disabled]="questions.length === 1"

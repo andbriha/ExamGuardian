@@ -89,7 +89,7 @@ class LivenessAnalyzer:
 
         nose_y   = lm[1].y
         center_y = (lm[152].y + lm[10].y) / 2.0
-        pitch    = nose_y - center_y
+        pitch    = relative_pitch(nose_y, lm[10].y, lm[152].y)
 
         violations = []
 

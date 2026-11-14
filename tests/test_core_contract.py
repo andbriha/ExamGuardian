@@ -94,6 +94,34 @@ class CoreContracts(unittest.TestCase):
             CAPABILITIES[self.students[student][1]] = {"X-Session-Token": result["attemptToken"], "X-Evidence-Token": result["evidenceToken"]}
         return status, result
 
+    def test_group_credentials_are_scoped_and_reset_only_after_confirmation(self):
+        group = 'ACCESS_' + uuid4().hex
+        self.assertEqual(request('/api/groups', 'POST', {'name': group}, self.teacher)[0], 201)
+        student_id, token, login, old_password = self.students[0]
+        request(f'/api/groups/students/{student_id}', 'PUT', {'name': group}, self.teacher)
+        path = '/api/groups/credentials'
+        self.assertEqual(request(path+'?group='+group, token=token)[0], 403)
+        self.assertEqual(request(path, 'POST', {'group':group,'studentIds':[student_id]}, token)[0], 403)
+        status, content = request(path+'?group='+group, token=self.teacher)
+        self.assertEqual(status, 200, content)
+        rows = list(csv.DictReader(io.StringIO(content.decode('utf-8-sig'))))
+        self.assertEqual([r['username'] for r in rows], [login])
+        self.assertNotIn('password', rows[0])
+        self.assertEqual(request('/api/Auth/login', 'POST', {'login':login,'password':old_password})[0],200)
+        self.assertEqual(request(path, 'POST', {'group':group,'studentIds':[]}, self.teacher)[0],409)
+        status, content = request(path, 'POST', {'group':group,'studentIds':[student_id]}, self.teacher)
+        self.assertEqual(status, 200, content)
+        rows = list(csv.DictReader(io.StringIO(content.decode('utf-8-sig'))))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['username'], login)
+        self.assertGreaterEqual(len(rows[0]['password']), 12)
+        self.assertEqual(request('/api/Auth/login', 'POST', {'login':login,'password':old_password})[0],401)
+        self.assertEqual(request('/api/Auth/login', 'POST', {'login':login,'password':rows[0]['password']})[0],200)
+        other = self.students[1]
+        self.assertEqual(request('/api/Auth/login', 'POST', {'login':other[2],'password':other[3]})[0],200)
+        self.assertEqual(self.start()[0],200)
+        self.assertEqual(request(path, 'POST', {'group':group,'studentIds':[student_id]}, self.teacher)[0],409)
+
     def test_qti_preview_validates_package_and_does_not_create_exam(self):
         xml = (Path(__file__).parent / 'fixtures/qti-single-choice.xml').read_bytes()
         def upload(content, name='item.xml', token=None):
@@ -311,11 +339,33 @@ class CoreContracts(unittest.TestCase):
         self.assertEqual(request("/api/Violations/report", "POST", event, self.students[1][1])[0], 403)
         path = f"/api/Violations/{observation['id']}/review"
         self.assertEqual(request(path, "PATCH", {"decision": "Confirmed"}, self.students[0][1])[0], 403)
-        for verdict in ["Confirmed", "Dismissed"]:
+        self.assertEqual(request(path, "PATCH", {"decision": "Confirmed", "notes": " "}, self.teacher)[0], 400)
+        for verdict in ["Confirmed", "Dismissed", "InsufficientEvidence", "NoViolation"]:
             self.assertEqual(request(path, "PATCH", {"decision": verdict, "notes": "Test reason"}, self.teacher)[0], 204)
             _, saved = request(f"/api/Violations/{observation['id']}", token=self.teacher)
             self.assertEqual(saved["reviewDecision"], verdict)
             self.assertIsNotNone(saved["reviewedBy"])
+
+    def test_ai_episode_updates_keep_one_card_and_reopen_review(self):
+        _, session = self.start()
+        headers={'X-Api-Key':'examguardian-integration-test-ai-key'}
+        event={'examSessionId':session['id'],'eventId':str(uuid4()),'violationType':'cell_phone',
+               'confidence':.8,'relativeTimestampSeconds':2,'metadata':json.dumps({'episode':{'revision':1,'start':2,'last_observed':4}})}
+        status, first=request('/api/Violations','POST',event,extra_headers=headers)
+        self.assertEqual(status,201,first)
+        path=f"/api/Violations/{first['id']}"
+        self.assertEqual(request(path+'/review','PATCH',{'decision':'NoViolation','notes':'Initial clip reviewed'},self.teacher)[0],204)
+        _, duplicate=request('/api/Violations','POST',event,extra_headers=headers)
+        self.assertEqual(duplicate['reviewDecision'],'NoViolation')
+        updated=dict(event,metadata=json.dumps({'episode':{'revision':2,'start':2,'last_observed':19}}))
+        _, changed=request('/api/Violations','POST',updated,extra_headers=headers)
+        self.assertEqual(changed['id'],first['id']); self.assertEqual(changed['reviewDecision'],'Pending')
+        self.assertEqual(len(json.loads(changed['reviewHistoryJson'])),1)
+        _, stale=request('/api/Violations','POST',event,extra_headers=headers)
+        self.assertEqual(json.loads(stale['metadata'])['episode']['revision'],2)
+        _, observations=request(f"/api/Violations/by-session/{session['id']}",token=self.teacher)
+        self.assertEqual(len(observations),1)
+        self.assertEqual(request('/api/Violations','POST',dict(event,violationType='book'),extra_headers=headers)[0],400)
 
     def test_teacher_scope_and_no_capability_disclosure(self):
         _, session=self.start()
@@ -422,6 +472,10 @@ class CoreContracts(unittest.TestCase):
 
     def test_evidence_manifest_does_not_hide_missing_screen(self):
         _, session=self.start(); sid=session["id"]; token=self.students[0][1]
+        event={"examSessionId":sid,"eventId":str(uuid4()),"violationType":"cell_phone","confidence":.9,"relativeTimestampSeconds":0}
+        _,observation=request('/api/Violations/report','POST',event,token)
+        self.assertEqual(observation['priority'],'Warning')
+        self.assertEqual(request(f"/api/Violations/{observation['id']}/review",'PATCH',{'decision':'NoViolation','notes':'Permitted context checked'},self.teacher)[0],204)
         self.assertEqual(upload_video(sid,1,token)[0],200)
         self.assertEqual(request(f"/api/Exams/{self.exam['id']}/submit","POST",{"sessionId":sid,"answers":{}},token)[0],200)
         path=f"/api/video/{sid}/finalize"

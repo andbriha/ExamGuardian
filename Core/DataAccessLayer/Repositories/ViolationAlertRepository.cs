@@ -20,7 +20,7 @@ public class ViolationAlertRepository : GenericRepository<ViolationAlert>, IViol
         await _dbSet
             .Include(va => va.Session)
                 .ThenInclude(es => es.Student)
-            .Where(va => !va.IsReviewed)
+            .Where(va => !va.IsReviewed || va.ReviewDecision == "InsufficientEvidence")
             .OrderBy(va => va.Timestamp)
             .ToListAsync();
 

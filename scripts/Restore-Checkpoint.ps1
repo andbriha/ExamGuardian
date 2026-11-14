@@ -12,6 +12,9 @@ foreach ($entry in $checksums) {
 }
 New-Item -ItemType Directory -Path $target | Out-Null
 foreach ($folder in @('videos','images','state')) { Copy-Item -LiteralPath (Join-Path $backup $folder) -Destination (Join-Path $target $folder) -Recurse }
+if (Test-Path -LiteralPath (Join-Path $backup 'credential-keys')) {
+    Copy-Item -LiteralPath (Join-Path $backup 'credential-keys') -Destination (Join-Path $target 'credential-keys') -Recurse
+}
 $name = 'examguardian-restore-' + [Guid]::NewGuid().ToString('N').Substring(0,12)
 $bytes=New-Object byte[] 32
 $random=[Security.Cryptography.RandomNumberGenerator]::Create()

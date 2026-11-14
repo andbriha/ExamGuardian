@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # COCO класи які нас цікавлять
-FORBIDDEN_CLASSES = {
+OBSERVED_CLASSES = {
     67: "cell phone",
     0:  "person",      # друга особа в кадрі
     76: "book",
@@ -45,10 +45,11 @@ class ObjectDetector:
                 person_count += 1
                 continue
             
-            if cls_id in FORBIDDEN_CLASSES:
+            if cls_id in OBSERVED_CLASSES:
                 violations.append({
-                    "type":       FORBIDDEN_CLASSES[cls_id],
+                    "type":       OBSERVED_CLASSES[cls_id],
                     "confidence": round(conf, 4),
+                    "bbox": [round(float(v), 1) for v in box.xyxy[0]],
                 })
 
         # якщо в кадрі більше однієї особи — підказка

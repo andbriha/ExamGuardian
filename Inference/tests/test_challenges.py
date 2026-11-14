@@ -69,6 +69,26 @@ class Gestures(unittest.TestCase):
             self.assertTrue(set(sequence) & set(TASKS[:4]))
             self.assertTrue(set(sequence) & set(TASKS[4:]))
 
+    def test_natural_smile_does_not_block_head_movement(self):
+        state = {}
+        resting = {**self.neutral(), 'smile':.48, 'mouth':.28}
+        for now in (0., .2, .4): advance(state,'turn_left',resting,now)
+        self.assertIn('baseline',state)
+        for now in (.6, .9): advance(state,'turn_left',{**resting,'yaw':-.15},now)
+        for now in (1.1, 1.4): result = advance(state,'turn_left',resting,now)
+        self.assertTrue(result[0])
+
+    def test_nod_needs_a_real_return_not_just_a_held_target(self):
+        state = self.calibrated()
+        target = {**self.neutral(),'gesture_pitch':.075}
+        for now in (2., 2.5, 3., 3.5, 4.): self.assertFalse(advance(state,'nod',target,now)[0])
+        advance(state,'nod',self.neutral(),4.5)
+        self.assertTrue(advance(state,'nod',self.neutral(),5.)[0])
+
+    def test_wrong_turn_explains_direction(self):
+        state = self.calibrated()
+        self.assertEqual(advance(state,'turn_right',{**self.neutral(),'yaw':-.2},2.)[1], 'opposite_direction')
+
 
 if __name__ == "__main__":
     unittest.main()

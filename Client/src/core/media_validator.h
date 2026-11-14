@@ -25,6 +25,7 @@ signals:
     void verificationPhaseChanged(QString phase);
     void checkResult(bool passed, QString message);
     void analysisUnavailable(const QString &message);
+    void cameraAvailabilityChanged(bool available);
     void progressUpdated(const QString &message);
 
     void requestChallenge();

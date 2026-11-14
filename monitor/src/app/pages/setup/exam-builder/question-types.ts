@@ -3,15 +3,16 @@ export interface DraftQuestion {
   kind?: QuestionKind;
   text: string;
   points: number;
+  reportCategory?: string;
   correctIndex: number;
   options: { text: string }[];
 }
 export function createQuestion(kind: QuestionKind = 'singleChoice'): DraftQuestion {
-  return {kind, text:'', points:1, correctIndex:0,
+  return {kind, reportCategory:'Тестові завдання', text:'', points:1, correctIndex:0,
     options: (kind === 'trueFalse' ? ['Правда', 'Неправда'] : ['', '', '', '']).map(text => ({text}))};
 }
 export function importedQuestion(question: {text:string; points:number; correctIndex:number; options:string[]}): DraftQuestion {
   const labels = question.options.map(option => option.trim().toLowerCase());
   const trueFalse = labels.length === 2 && [['true','false'],['правда','неправда'],['так','ні']].some(pair => pair.every(label => labels.includes(label)));
-  return {...question,kind:trueFalse ? 'trueFalse' : 'singleChoice',options:question.options.map(text => ({text}))};
+  return {...question,reportCategory:'Тестові завдання',kind:trueFalse ? 'trueFalse' : 'singleChoice',options:question.options.map(text => ({text}))};
 }

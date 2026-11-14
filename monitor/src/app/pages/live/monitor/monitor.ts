@@ -1,5 +1,7 @@
+import { observationPriority, priorityLabel, episodeLabel, decisionLabel } from '../../../services/observation-presentation';
 import { findEvidenceChunk } from '../../../services/evidence-timeline';
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 
@@ -36,11 +38,16 @@ export interface AlertView {
 @Component({
   selector: 'app-monitor',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, FormsModule],
   templateUrl: './monitor.html',
   styleUrl: './monitor.css'
 })
 export class MonitorComponent implements OnInit, OnDestroy {
+  observationPriority = observationPriority;
+  priorityLabel = priorityLabel;
+  episodeLabel = episodeLabel;
+  decisionLabel = decisionLabel;
+
   @ViewChild('dispatcherVideo') videoRef?: ElementRef<HTMLVideoElement>;
   readonly Math = Math;
 
@@ -50,6 +57,16 @@ export class MonitorComponent implements OnInit, OnDestroy {
   students: StudentSessionView[] = [];
   selectedSession: StudentSessionView | null = null;
   alerts: AlertView[] = [];
+  alertsError = '';
+  alertsUpdatedAt: Date | null = null;
+  alertsLoading = false;
+  queueFilter = 'new';
+  queueSearch = '';
+  get visibleAlerts(): AlertView[] {
+    const search = this.queueSearch.trim().toLocaleLowerCase();
+    return this.alerts.filter(a => (!search || `${a.studentName} ${a.type}`.toLocaleLowerCase().includes(search)) &&
+      (this.queueFilter === 'all' || (this.queueFilter === 'waiting' ? a.raw.reviewDecision === 'InsufficientEvidence' : a.raw.reviewDecision !== 'InsufficientEvidence')));
+  }
   
   // Video & Timeline states
   sessionViolations: ViolationAlertDto[] = [];
@@ -248,11 +265,16 @@ export class MonitorComponent implements OnInit, OnDestroy {
   }
 
   refreshAlerts() {
+    if (this.alertsLoading) return;
+    this.alertsLoading = true;
     this.violationService.getUnreviewed().pipe(takeUntil(this.destroyed)).subscribe({
       next: (unreviewed) => {
+        this.alertsLoading = false; this.alertsError = ''; this.alertsUpdatedAt = new Date();
         this.isLoading = false;
         if (unreviewed && unreviewed.length > 0) {
-          this.alerts = unreviewed.filter(u => this.students.some(s => s.sessionId === u.examSessionId)).map(u => ({
+          const rank = {Intervention: 0, Warning: 1, Observation: 2};
+          this.alerts = unreviewed.filter(u => this.students.some(s => s.sessionId === u.examSessionId))
+            .sort((a,b) => rank[observationPriority(a)]-rank[observationPriority(b)] || Date.parse(a.timestamp)-Date.parse(b.timestamp)).map(u => ({
             id: u.id.toString(),
             sessionId: u.examSessionId,
             time: new Date(u.timestamp).toLocaleTimeString(),
@@ -268,8 +290,8 @@ export class MonitorComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
       },
       error: () => {
-        this.alerts = [];
-        this.evidenceError = "Список подій тимчасово недоступний.";
+        this.alertsLoading = false;
+        this.alertsError = "Не вдалося оновити чергу. Показано останні отримані дані.";
         this.isLoading = false;
         this.cdr.detectChanges();
       }
@@ -410,14 +432,18 @@ export class MonitorComponent implements OnInit, OnDestroy {
   getViolationLabel(type: string): string {
     const map: Record<string, string> = {
       'identity_uncertain': 'Особа потребує повторної перевірки',
-      'cell_phone': '📱 Телефон у руках / на столі',
+      'cell_phone': 'Предмет, схожий на телефон',
+      'book': 'Предмет, схожий на книгу',
+      'laptop': 'Предмет, схожий на ноутбук',
+      'extra_person': 'Можлива додаткова людина в кадрі',
+      'analysis_unavailable': 'Тривало недостатня якість кадру',
       'micro_earpiece': '🎧 Мікронавушник у вусі',
       'earphone_detected': '🎧 Навушники виявлено',
       'looking_away_left': '👀 Поворот голови ліворуч',
       'looking_away_right': '👀 Поворот голови праворуч',
       'looking_down': '⬇️ Нахил голови вниз',
       'looking_away': '👀 Відведення погляду',
-      'multiple_faces': '👥 Стороння особа в кадрі',
+      'multiple_faces': 'Виявлено кілька облич — перевірте контекст',
       'face_missing': '🚫 Обличчя не розпізнано у кадрі',
       'voice_detected': '🎙️ Мовленнєва активність',
       'voice_activity': '🎙️ Мовленнєва активність',

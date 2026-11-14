@@ -5,17 +5,30 @@
 #include <QUuid>
 
 MediaViewModel::MediaViewModel(QObject *parent) : QObject(parent) {
+    connect(&m_pronunciation, &PronunciationPlayer::activeChanged, this, [this](bool active) {
+        m_pronunciationPlaying = active;
+        m_audio.stop();
+        m_mlApi.suspendVerificationAudio(active);
+        emit pronunciationPlayingChanged(active);
+        if (!active && m_verifying) m_audio.start(0, 1);
+        emit verificationAudioStatus(active ? "Слухайте зразок. Мікрофон призупинено." : "Тепер повторіть склади самостійно.");
+    });
+    connect(&m_pronunciation, &PronunciationPlayer::unavailable, this, [this] {
+        emit verificationAudioStatus("Не вдалося відтворити зразок. Перевірте вихід звуку.");
+    });
     connect(&m_audio,&AudioCapture::captured,this,[this](const QByteArray &data,int seconds){
         if (m_verifying) m_mlApi.sendVerificationAudio(data);
-        else m_mlApi.sendAudioForAnalysis(data,seconds);
+        else { emit microphoneAvailabilityChanged(true); m_mlApi.sendAudioForAnalysis(data,seconds); }
     });
     connect(&m_audio, &AudioCapture::unavailable, this, [this](const QString &message) {
         if (m_verifying) emit verificationAudioStatus(message);
-        else emit analysisStatusChanged(message);
+        else { emit microphoneAvailabilityChanged(false); emit analysisStatusChanged(message); }
     });
     connect(&m_mlApi, &MlApiClient::verificationAudioStatus, this, &MediaViewModel::verificationAudioStatus);
+    connect(&m_mlApi, &MlApiClient::verificationProgress, this, &MediaViewModel::verificationProgress);
     connect(&m_mlApi, &MlApiClient::continuousAnalysisFinished, this, [this](bool, const QString &message) { emit analysisStatusChanged(message); });
     connect(&m_media, &MediaValidator::analysisUnavailable, this, &MediaViewModel::analysisStatusChanged);
+    connect(&m_media, &MediaValidator::cameraAvailabilityChanged, this, &MediaViewModel::cameraAvailabilityChanged);
     // 1. Validator -> QML UI
     connect(&m_media, &MediaValidator::instructionReceived, this, &MediaViewModel::instructionReceived);
     connect(&m_media, &MediaValidator::verificationPhaseChanged, this, &MediaViewModel::verificationPhaseChanged);
@@ -34,8 +47,11 @@ MediaViewModel::MediaViewModel(QObject *parent) : QObject(parent) {
 
     // 3. ML API -> Validator
     connect(&m_mlApi, &MlApiClient::challengeReceived, &m_media, &MediaValidator::onChallengeReceived);
-    connect(&m_mlApi, &MlApiClient::challengeReceived, this, [this](const QString &) {
-        if (m_verifying && !m_audio.isActive()) m_audio.start(0, 1);
+    connect(&m_mlApi, &MlApiClient::challengeReceived, this, [this](const QString &task) {
+        m_pronunciation.stop();
+        m_syllables = task.startsWith("say_phrase:") ? task.mid(11) : QString();
+        emit syllablesChanged(m_syllables);
+        if (m_verifying && !m_pronunciationPlaying && !m_audio.isActive()) m_audio.start(0, 1);
     });
     connect(&m_mlApi, &MlApiClient::verificationFinished, &m_media, &MediaValidator::onVerificationFinished);
 
@@ -76,6 +92,9 @@ bool MediaViewModel::isVirtualCamera(const QString &cameraName) {
 void MediaViewModel::stopVerificationSession() {
     if (m_verifying) m_audio.stop();
     m_verifying = false;
+    m_pronunciation.stop();
+    m_syllables.clear();
+    emit syllablesChanged(m_syllables);
     m_media.stopVerificationSession();
     m_mlApi.cancelVerification();
 }
@@ -86,11 +105,13 @@ void MediaViewModel::setVideoSink(QVideoSink *sink) {
 
 void MediaViewModel::startContinuousProctoring(int elapsedSeconds) {
     stopVerificationSession();
+    m_mlApi.startContinuousAudio();
     m_media.startContinuousProctoring(elapsedSeconds);
     m_audio.start(elapsedSeconds);
 }
 
 void MediaViewModel::stopContinuousProctoring() {
+    m_mlApi.stopContinuousAudio();
     m_media.stopContinuousProctoring();
     m_audio.stop();
 }

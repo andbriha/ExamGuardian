@@ -59,57 +59,25 @@ Page {
             resultDialog.open()
         }
         function onExamLoadFailed(message) { root.loadError = message }
-        function onAnswersSaved(success) { root.saveStatus = success ? "Відповіді збережено на сервері" : "Немає підтвердження збереження. Перевірте з’єднання." }
-        function onSessionTerminated() { mainWindow.exitExamMode(); resultSuccess = true; resultMessage = "Спробу завершено сервером або викладачем."; resultDialog.open() }
-        function onProhibitedProcessAlert(processName) {
-            root.prohibitedAppAlert = "⚠️ УВАГА: Виявлено роботу забороненої програми (" + processName + ")! Спостереження потребує перевірки викладача. Стан доставки показано окремо."
-            appAlertTimer.restart()
+        function onAnswersSaved(success) {
+            if (success) { saveDelay.stop(); root.saveStatus = "Відповіді збережено" }
+            else { root.saveStatus = "Очікуємо підтвердження збереження…"; if (!saveDelay.running) saveDelay.start() }
         }
+        function onSessionTerminated() { mainWindow.exitExamMode(); resultSuccess = true; resultMessage = "Спробу завершено сервером або викладачем."; resultDialog.open() }
     }
 
-    property string prohibitedAppAlert: ""
-
-    Timer {
-        id: appAlertTimer
-        interval: 7000
-        onTriggered: root.prohibitedAppAlert = ""
-    }
-
+    Timer { id: saveDelay; interval: 10000; onTriggered: root.saveStatus = "Не вдалося підтвердити збереження відповідей. Перевірте з’єднання; клієнт повторює спробу." }
     Timer { interval: 5000; repeat: true; running: root.isLoaded && mainWindow.isExamActive; onTriggered: { ExamVM.saveAnswers(root.answers); ExamVM.heartbeat() } }
     Component.onCompleted: {
         ExamVM.loadExam()
     }
 
     ColumnLayout {
-        enabled: !ProcessVM.virtualizationBlocked
-        visible: !ProcessVM.virtualizationBlocked
         anchors.fill: parent
         anchors.margins: 40
         spacing: 16
 
-        // Попередження про виявлену заборонену програму (Discord, Telegram тощо)
-        Rectangle {
-            Layout.fillWidth: true
-            height: 44
-            visible: root.prohibitedAppAlert.length > 0
-            color: "#D32F2F"
-            radius: 8
-
-            RowLayout {
-                anchors.fill: parent
-                anchors.margins: 12
-                spacing: 8
-                Text { text: "🛑"; font.pixelSize: 16 }
-                Label {
-                    text: root.prohibitedAppAlert
-                    color: "white"
-                    font.bold: true
-                    font.pixelSize: 13
-                    Layout.fillWidth: true
-                }
-            }
-        }
-
+        // Proctoring observations are reviewed by the examiner without interrupting the student.
         Label { text: root.loadError; visible: text.length > 0; color: "#b91c1c"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
         Button { text: "Повторити підключення"; visible: root.loadError.length > 0; onClicked: { root.loadError = ""; ExamVM.loadExam() } }
         Label { text: root.saveStatus; wrapMode: Text.WordWrap; Layout.fillWidth: true }
@@ -151,9 +119,10 @@ Page {
             }
         }
 
-        Label { text: mainWindow.analysisStatus; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-        Label { text: mainWindow.technicalStatus; visible: text.length > 0; color: "#b91c1c"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
-        Label { text: mainWindow.uploadStatus; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Label { text: mainWindow.technicalStatus; visible: text.length > 0; color: "#92400e"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Label { text: "Камера не надсилає кадри. Перевірте підключення; ваші відповіді зберігаються окремо."; visible: mainWindow.cameraNeedsAttention; color: "#92400e"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Label { text: "Мікрофон недоступний. Перевірте підключення та дозвіл на запис; за потреби зверніться до викладача."; visible: mainWindow.microphoneNeedsAttention; color: "#92400e"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+        Label { text: mainWindow.uploadStatus; visible: !mainWindow.isExamActive; wrapMode: Text.WordWrap; Layout.fillWidth: true }
         Button { text: "Закрити клієнт"; visible: root.resultSuccess && !mainWindow.isExamActive; enabled: mainWindow.pendingVideoUploads === 0; onClicked: Qt.quit() }
         Button { text: "Вийти зі збереженою чергою на цьому ПК"; visible: root.resultSuccess && !mainWindow.isExamActive && mainWindow.pendingVideoUploads > 0; onClicked: Qt.quit() }
         // Лічильник питань
@@ -316,37 +285,4 @@ Page {
 
         onAccepted: { if (root.resultSuccess) root.examFinished(); else if (root.totalSeconds > 0) examTimer.running = true }
     }
-    Rectangle {
-        anchors.fill: parent
-        z: 100
-        color: "#FFF1F2"
-        visible: root.isLoaded && ProcessVM.virtualizationBlocked && !root.resultSuccess
-        MouseArea { anchors.fill: parent }
-        ColumnLayout {
-            anchors.centerIn: parent
-            width: Math.min(parent.width - 48, 720)
-            spacing: 20
-            Label {
-                text: "Виконання завдань заблоковано: віртуалізація"
-                font.pixelSize: 22
-                font.bold: true
-                color: "#991B1B"
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-            Label {
-                text: "Виявлено активний гіпервізор, контейнерне середовище або неможливо завершити перевірку. Закрийте відповідне ПЗ та служби. Перевірка повторюється автоматично. Час іспиту та запис продовжуються."
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-            ScrollView {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 150
-                clip: true
-                TextArea { text: ProcessVM.vmDetails; readOnly: true; wrapMode: TextEdit.Wrap; selectByMouse: true }
-            }
-            Button { text: "Завершити іспит і надіслати збережені відповіді"; onClicked: root.submitExam() }
-        }
-    }
-
 }

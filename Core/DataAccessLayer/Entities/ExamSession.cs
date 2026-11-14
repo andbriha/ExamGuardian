@@ -15,6 +15,7 @@ public class ExamSession
     public DateTime? LastSeenAt { get; set; }
     public string Status { get; set; } = "InProgress";
     public string SavedAnswersJson { get; set; } = "{}";
+    public string? QuestionScoresJson { get; set; }
     public string? ExamSnapshotJson { get; set; }
     public string ActiveClientId { get; set; } = "";
     public string? EvidenceClientId { get; set; }

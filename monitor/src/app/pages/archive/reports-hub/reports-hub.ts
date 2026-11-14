@@ -1,7 +1,8 @@
 import { RouterModule } from '@angular/router';
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { GroupResultsComponent } from '../group-results/group-results';
 import { GradeExportComponent } from '../grade-export/grade-export';
 
 import { ExamService, ExamDto } from '../../../services/exam.service';
@@ -29,28 +30,34 @@ export interface CompletedExamView {
 @Component({
   selector: 'app-reports-hub',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, GradeExportComponent],
+  imports: [CommonModule, RouterModule, FormsModule, GradeExportComponent, GroupResultsComponent],
   templateUrl: './reports-hub.html',
   styleUrl: './reports-hub.css'
 })
 export class ReportsHubComponent implements OnInit {
+  @ViewChild(GradeExportComponent) gradeExport?: GradeExportComponent;
   completedExams: CompletedExamView[] = [];
   exams: ExamDto[] = [];
+  sessions: ExamSessionDto[] = [];
   review: ExamSessionDto | null = null;
   reviewLoading = false;
   reviewSaving = false;
-  reviewVerdict = 'Accepted';
+  reviewVerdict = '';
   reviewNotes = '';
   reviewError = '';
+  reviewSuccess = '';
   reviewHistory: { verdict: string; notes: string; at: string; reviewerId: string }[] = [];
 
   openReview(id: string) {
+    if (this.reviewSaving || this.reviewLoading) return;
+    this.reviewSuccess = '';
     const sameAttempt = this.review?.id === Number(id);
-    if (!sameAttempt) { this.reviewNotes = ''; this.reviewVerdict = 'Accepted'; }
+    if (!sameAttempt) { this.reviewNotes = ''; this.reviewVerdict = ''; }
     this.review = null; this.reviewLoading = true; this.reviewError = '';
     this.sessionService.getById(Number(id)).subscribe({
       next: session => {
         this.review = session; this.reviewLoading = false;
+        setTimeout(() => document.getElementById('review-heading')?.scrollIntoView({behavior: 'smooth', block: 'start'}));
         try { const history = JSON.parse(session.integrityHistoryJson || '[]'); this.reviewHistory = Array.isArray(history) ? history.slice().reverse() : []; }
         catch { this.reviewHistory = []; }
         this.cdr.markForCheck();
@@ -58,15 +65,20 @@ export class ReportsHubComponent implements OnInit {
       error: () => { this.reviewError = 'Не вдалося оновити стан спроби.'; this.reviewLoading = false; this.cdr.markForCheck(); }
     });
   }
+  closeReview() {
+    this.review = null;
+    document.getElementById('group-results-heading')?.scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
   evidenceLabel(status: string): string {
     return ({Delivered:'Доставлено повністю',Pending:'Очікується доставка',Partial:'Доставлено частково',Unknown:'Стан невідомий',Expired:'Строк зберігання минув'} as Record<string,string>)[status] || status;
   }
   reviewBlock(verdict: string): string {
+    if (!['Accepted','Rejected','Inconclusive'].includes(verdict)) return 'Оберіть висновок після перевірки матеріалів.';
     const s = this.review;
     if (verdict === 'Accepted' && s?.identityVerificationSkipped) return 'DEV: перевірку особи пропущено. Результат не можна підтвердити або експортувати.';
     if (!s?.isFinished) return 'Спочатку завершіть спробу.';
     if (verdict === 'Accepted' && s.evidenceStatus !== 'Delivered') return 'Дочекайтеся повної доставки доказів або оберіть «Недостатньо доказів».';
-    if (verdict === 'Accepted' && ((s.pendingObservationCount ?? 0) + (s.confirmedObservationCount ?? 0) > 0)) return 'Для прийняття потрібно перевірити й відхилити всі сигнали.';
+    if (verdict === 'Accepted' && ((s.pendingObservationCount ?? 0) + (s.confirmedObservationCount ?? 0) > 0)) return 'Перевірте всі сигнали: для прийняття потрібні рішення «Помилка розпізнавання» або «Подія була, порушення немає».';
     if (verdict === 'Rejected' && !(s.confirmedObservationCount! > 0)) return 'Спочатку підтвердьте хоча б один сигнал у матеріалах сесії.';
     return '';
   }
@@ -74,7 +86,7 @@ export class ReportsHubComponent implements OnInit {
     if (!this.review || this.reviewSaving || this.reviewBlock(this.reviewVerdict) || !this.reviewNotes.trim()) return;
     this.reviewSaving = true; this.reviewError = '';
     this.sessionService.review(this.review.id, this.reviewVerdict, this.reviewNotes.trim()).subscribe({
-      next: () => { this.reviewSaving = false; this.review = null; this.loadReports(); },
+      next: () => { this.reviewSaving = false; this.reviewSuccess = 'Рішення збережено.'; this.closeReview(); this.loadReports(); this.gradeExport?.refresh(); },
       error: error => { this.reviewSaving = false; this.reviewError = error.error?.message || 'Не вдалося зберегти рішення. Оновіть стан спроби.'; this.cdr.markForCheck(); }
     });
   }
@@ -96,6 +108,7 @@ export class ReportsHubComponent implements OnInit {
     this.isLoading = true;
     this.sessionService.getAll().subscribe({
       next: (sessions) => {
+        this.sessions = sessions;
         this.examService.getAll().subscribe({
           next: (exams) => {
             this.exams = exams;
@@ -104,13 +117,14 @@ export class ReportsHubComponent implements OnInit {
             this.cdr.detectChanges();
           },
           error: () => {
-            this.buildViews(sessions, []);
+            this.exams = []; this.completedExams = []; this.sessions = [];
+            this.errorMessage = 'Не вдалося завантажити іспити. Оновіть архів.';
             this.isLoading = false;
             this.cdr.detectChanges();
           }
         });
       },
-      error: () => { this.completedExams = []; this.isLoading = false; this.errorMessage = 'Не вдалося отримати архів сесій. Спробуйте повторно.'; this.cdr.detectChanges(); }
+      error: () => { this.sessions = []; this.completedExams = []; this.isLoading = false; this.errorMessage = 'Не вдалося отримати архів сесій. Спробуйте повторно.'; this.cdr.detectChanges(); }
 
     });
   }

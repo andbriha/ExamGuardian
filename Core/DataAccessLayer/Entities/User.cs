@@ -7,6 +7,7 @@ public class User
     public string FullName { get; set; } = null!;
     public string Login { get; set; } = null!;
     public string PasswordHash { get; set; } = null!;
+    public string? IssuedPasswordProtected { get; set; }
     public string Role { get; set; } = null!;
     public string? Group { get; set; }
     public string? BioVector { get; set; }

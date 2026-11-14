@@ -21,14 +21,14 @@ bool MediaValidator::isVirtualCamera(const QString &cameraName) {
 }
 
 QString MediaValidator::translateTask(const QString &task) {
-    if (task == "turn_left")  return "Повільно поверніть голову ВЛІВО";
-    if (task == "turn_right") return "Повільно поверніть голову ВПРАВО";
-    if (task == "nod")        return "Повільно кивніть головою ВНИЗ і вверх";
+    if (task == "turn_left")  return "Поверніть голову до ВАШОГО лівого плеча й затримайте на мить";
+    if (task == "turn_right") return "Поверніть голову до ВАШОГО правого плеча й затримайте на мить";
+    if (task == "nod")        return "Повільно опустіть підборіддя й затримайте на мить — не махайте головою";
     if (task == "look_up") return "Повільно підніміть підборіддя ВГОРУ";
     if (task == "smile") return "Усміхніться та утримайте усмішку";
     if (task == "open_mouth") return "Відкрийте рот та утримайте положення";
     if (task == "close_eyes") return "Заплющте очі на дві секунди, потім відкрийте";
-    if (task.startsWith("say_phrase:")) return "Чітко скажіть: «" + task.mid(11) + "»";
+    if (task.startsWith("say_phrase:")) return "Повторіть склади за зразком, у вказаному порядку: «" + task.mid(11) + "»";
     return task;
 }
 
@@ -82,9 +82,10 @@ void MediaValidator::onVerificationFinished(bool verified, const QString &stage,
 
     qDebug() << "[VALIDATOR] Verification in progress. Stage:" << stage << "Reason:" << reason << "Dist:" << distance;
 
-    if(stage=="identity" || stage=="quality" || reason=="look_forward_first" || reason=="next_action") emit verificationPhaseChanged("prepare");
+    if(stage=="identity" || stage=="quality" || reason=="look_forward_first" || reason=="refresh_identity" || reason=="next_action") emit verificationPhaseChanged("prepare");
     else if(reason=="return_neutral" || reason=="confirm_live_face") emit verificationPhaseChanged("return");
-    else if(reason=="perform_action" || reason=="wrong_pose" || reason=="hold_pose" || reason=="say_phrase") emit verificationPhaseChanged("perform");
+    else if(reason=="hold_pose") emit verificationPhaseChanged("hold");
+    else if(reason=="perform_action" || reason=="wrong_pose" || reason=="opposite_direction" || reason=="say_phrase") emit verificationPhaseChanged("perform");
     QString hint;
     if (stage == "quality") {
         if (reason == "too_dark") hint = "Додайте світло перед обличчям, а не позаду.";
@@ -107,7 +108,11 @@ void MediaValidator::onVerificationFinished(bool verified, const QString &stage,
         if (reason == "quality_paused") {
             hint = "Кадр нечіткий або змінилося освітлення. Зачекайте мить — прогрес дії збережено.";
         } else if (reason == "confirm_live_face") {
-            hint = "Рух виконано. Дивіться прямо в камеру: підтверджуємо живу присутність повторно.";
+            hint = "Завдання виконано. Залишайтеся обличчям до камери для завершення кроку; повторювати дію не потрібно.";
+        } else if (reason == "refresh_identity") {
+            hint = "Прогрес дії збережено. На мить подивіться прямо, щоб оновити підтвердження особи.";
+        } else if (reason == "opposite_direction") {
+            hint = "Рух бачимо, але в інший бік. " + translateTask(m_currentTask);
         } else if (reason == "server_busy") {
             hint = "Сервер зайнятий. Автоматично повторюємо перевірку…";
         } else if (reason == "return_neutral") {
@@ -117,7 +122,7 @@ void MediaValidator::onVerificationFinished(bool verified, const QString &stage,
         } else if (reason == "next_action") {
             hint = "Дію зараховано! Наступне завдання…";
         } else if (reason == "look_forward_first") {
-            hint = "Спочатку подивіться прямо в камеру.";
+            hint = "Калібрування: дивіться прямо, відкрийте очі та потримайте голову нерухомо одну секунду.";
         } else if (reason == "hold_pose") {
             hint = "Утримайте дію ще мить, потім дочекайтеся підказки.";
         } else if (reason == "wrong_pose" || reason == "perform_action" || reason == "say_phrase") {
@@ -157,8 +162,9 @@ void MediaValidator::stopContinuousProctoring() {
 }
 
 void MediaValidator::grabAndSendFrame() {
-    if (!m_videoSink || !m_frameClock.isValid() || m_frameClock.elapsed() > 3000) { emit analysisUnavailable("Свіжий кадр камери не отримано. Перевірте пристрій."); return; }
+    if (!m_videoSink || !m_frameClock.isValid() || m_frameClock.elapsed() > 3000) { emit cameraAvailabilityChanged(false); emit analysisUnavailable("Свіжий кадр камери не отримано. Перевірте пристрій."); return; }
     QVideoFrame frame = m_videoSink->videoFrame();
+    emit cameraAvailabilityChanged(frame.isValid());
     if (frame.isValid()) {
         int relSec = 0;
         if (m_sessionStartTime.isValid()) {

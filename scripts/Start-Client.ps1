@@ -10,7 +10,7 @@ $env:EXAMGUARDIAN_URL=if($Production){$settings['PUBLIC_ORIGIN']}else{"http://12
 if (!$env:EXAMGUARDIAN_URL) {throw 'The selected origin is missing.'}
 try {
     $capabilities = Invoke-RestMethod -Uri "$env:EXAMGUARDIAN_URL/verify/capabilities" -TimeoutSec 15
-    if (3 -notin $capabilities.supported_protocols -or !$capabilities.audio_activity) { throw 'Expected verification protocol 3 with automatic audio. Rebuild the AI service.' }
+    if (4 -notin $capabilities.supported_protocols -or !$capabilities.audio_activity) { throw 'Expected verification protocol 4 with automatic audio. Rebuild the AI service.' }
 } catch {
     if ($Production) { throw "AI verification is unavailable or outdated at $env:EXAMGUARDIAN_URL. Start the matching environment before launching the production client. $($_.Exception.Message)" }
     Write-Warning 'AI verification is unavailable. A DEV identity bypass can be requested from the DEV server; normal verification and continuous AI analysis require a healthy AI service.'

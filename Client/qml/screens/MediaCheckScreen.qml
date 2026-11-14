@@ -17,8 +17,11 @@ Page {
     // 5: Success
     // 6: Error state (requires retry)
     property string audioStatus: "Мікрофон: очікування"
+    property string syllables: ""
+    property bool pronunciationPlaying: false
     property int step: 0
     property int actionNumber: 0
+    property int totalActions: 3
     property string serverInstruction: ""
     property string verificationPhase: "prepare"
     property string errorMessage: ""
@@ -37,13 +40,15 @@ Page {
     Connections {
         enabled: mediaPage.StackView.status === StackView.Active || mediaPage.StackView.status === StackView.Activating
         target: MediaVM
+        function onSyllablesChanged(value) { syllables = value }
+        function onPronunciationPlayingChanged(value) { pronunciationPlaying = value }
         function onVerificationAudioStatus(message) { audioStatus = message }
+        function onVerificationProgress(current, total) { actionNumber = current; totalActions = total }
 
         function onVerificationError(message) { step = 6; errorMessage = message; progressHint = "" }
         function onVerificationPhaseChanged(phase) { verificationPhase = phase }
         function onInstructionReceived(instruction) {
             verificationPhase = "prepare"
-            actionNumber += 1
             serverInstruction = instruction
             errorMessage = ""
             progressHint = "Спочатку дивіться прямо та розслабте обличчя. Дочекайтеся підказки."
@@ -84,11 +89,14 @@ Page {
 
     ColumnLayout {
         anchors.centerIn: parent
-        width: 600
+        width: Math.min(640, parent.width - 40)
         spacing: 15
 
         Label {
-            text: "🎥 Identity Verification"
+            text: "Перевірка особи та живої присутності"
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
             font.pixelSize: 24
             font.bold: true
             color: "#0277BD"
@@ -98,7 +106,7 @@ Page {
         // Блок з відео
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 350
+            Layout.preferredHeight: Math.min(300, mediaPage.height * 0.34)
             color: "black"
             radius: 8
             clip: true
@@ -124,12 +132,45 @@ Page {
                     width: parent.width - 24
                     wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
-                    text: "📝 Дія " + actionNumber + "/3: " + (verificationPhase === "prepare" ? "Спочатку дивіться прямо в камеру" : verificationPhase === "return" ? "Поверніться прямо та розслабте обличчя" : serverInstruction)
+                    text: "Крок " + actionNumber + " із " + totalActions + " · " + (verificationPhase === "prepare" ? "Калібрування: дивіться прямо" : verificationPhase === "return" ? "Завершення: поверніться прямо" : verificationPhase === "hold" ? "Рух бачимо — утримуйте ще мить" : "Виконайте завдання нижче")
                     color: "#FFEB3B"
                     font.pixelSize: 16
                     font.bold: true
                 }
             }
+        }
+
+        ProgressBar {
+            Layout.fillWidth: true
+            from: 0; to: totalActions
+            value: step === 5 ? totalActions : Math.max(0, actionNumber - 1)
+            visible: step === 3 || step === 5
+        }
+        Label {
+            Layout.fillWidth: true
+            text: serverInstruction
+            visible: step === 3
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            font.pixelSize: 19
+            font.bold: true
+            color: "#164E63"
+        }
+
+        Button {
+            Layout.alignment: Qt.AlignHCenter
+            visible: step === 3 && syllables.length > 0
+            enabled: !pronunciationPlaying
+            text: pronunciationPlaying ? "Слухайте…" : "▶ Прослухати вимову · " + syllables
+            onClicked: MediaVM.playPronunciation()
+        }
+        Label {
+            Layout.fillWidth: true
+            visible: step === 3 && syllables.length > 0
+            text: "MA /ma/ · MI /mi/ · MU /mu/ — звуки, не назви літер. Повторіть за зразком та зробіть паузу."
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            color: "#546E7A"
         }
 
         // Банер помилки верифікації
@@ -197,7 +238,7 @@ Page {
         // Банер підказки (progress hint)
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: visible ? 76 : 0
+            Layout.preferredHeight: visible ? Math.max(76, progressLabel.implicitHeight + 24) : 0
             visible: progressHint.length > 0 && step !== 1
             color: step === 5 ? "#E8F5E9" : "#FFF8E1"
             border.color: step === 5 ? "#81C784" : "#FFD54F"
@@ -205,6 +246,7 @@ Page {
             clip: true
 
             Label {
+                id: progressLabel
                 anchors.centerIn: parent
                 width: parent.width - 24
                 wrapMode: Text.WordWrap

@@ -6,6 +6,7 @@ public class Question
     public int ExamId { get; set; }
     public string Text { get; set; } = null!;
     public int Points { get; set; }
+    public string ReportCategory { get; set; } = "Тестові завдання";
     public int CorrectIndex { get; set; }
     public int OrderIndex { get; set; }
 

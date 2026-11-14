@@ -1,5 +1,7 @@
+import { observationPriority, priorityLabel, episodeLabel, decisionLabel } from '../../../services/observation-presentation';
 import { findEvidenceChunk } from '../../../services/evidence-timeline';
 import { Component, OnInit, ViewChild, ElementRef, ChangeDetectorRef, OnDestroy } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { CommonModule, Location } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 
@@ -11,11 +13,16 @@ import { ExamService } from '../../../services/exam.service';
 @Component({
   selector: 'app-violation-detail',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, FormsModule],
   templateUrl: './violation-detail.html',
   styleUrls: ['./violation-detail.css']
 })
 export class ViolationDetailComponent implements OnInit, OnDestroy {
+  observationPriority = observationPriority;
+  priorityLabel = priorityLabel;
+  episodeLabel = episodeLabel;
+  decisionLabel = decisionLabel;
+
   @ViewChild('videoPlayer') videoRef?: ElementRef<HTMLVideoElement>;
   readonly Math = Math;
 
@@ -52,7 +59,7 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
     initials: 'СІ',
     login: 'student',
     examName: 'Іспит',
-    group: 'Група'
+    group: 'Групу не вказано'
   };
 
   constructor(
@@ -77,13 +84,11 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
 
     this.violationService.getById(numId).pipe(takeUntil(this.destroyed)).subscribe({
       next: (vio) => {
-        this.currentViolation = vio;
-        if (vio.eventId) this.violationService.getEvidence(vio.eventId).pipe(takeUntil(this.destroyed)).subscribe({next: blob => { if(this.evidenceImageUrl) URL.revokeObjectURL(this.evidenceImageUrl); this.evidenceImageUrl = URL.createObjectURL(blob); this.cdr.detectChanges(); },error: () => {}});
-        this.activeMarker = vio;
+        this.selectObservation(vio);
         this.loadSessionData(vio.examSessionId, vio);
       },
       error: (err) => {
-        console.error('Failed to load violation:', err);
+        this.reviewError = 'Не вдалося завантажити спостереження. Оновіть сторінку.'; this.cdr.detectChanges();
       }
     });
   }
@@ -103,6 +108,7 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
     // 2. Load session info to get student name and exam title
     this.sessionService.getById(sessionId).pipe(takeUntil(this.destroyed)).subscribe({
       next: (session: ExamSessionDto) => {
+        this.sessionExamId = session.examId;
         const studentName = session.studentName || `Студент #${session.studentId.substring(0, 8)}`;
         const initials = studentName.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase() || 'СТ';
         this.studentInfo = {
@@ -110,7 +116,7 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
           initials,
           login: session.studentId,
           examName: session.examTitle || `Іспит #${session.examId}`,
-          group: 'Основна група'
+          group: 'Групу не вказано'
         };
         this.cdr.detectChanges();
       },
@@ -120,7 +126,7 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
           initials: 'СЕ',
           login: `session_${sessionId}`,
           examName: `Іспит сесії #${sessionId}`,
-          group: 'Основна група'
+          group: 'Групу не вказано'
         };
       }
     });
@@ -129,10 +135,22 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
     this.loadVideoChunks(sessionId, targetViolation.relativeTimestampSeconds);
   }
 
+  selectedStream: 'camera' | 'screen' = 'camera';
+  private videoRequest = 0;
+  changeStream(stream: 'camera' | 'screen'): void {
+    const current = this.videoChunks.find(c => c.chunkIndex === this.selectedChunkIndex);
+    const at = (current?.metadata?.startOffsetSeconds ?? 0) + this.currentTime;
+    this.selectedStream = stream;
+    if (this.currentViolation) this.loadVideoChunks(this.currentViolation.examSessionId, at);
+  }
   private loadVideoChunks(sessionId: number, targetTimestampSec: number): void {
+    const request = ++this.videoRequest;
+    this.hasVideo = false; this.currentVideoUrl = ''; this.videoChunks = []; this.evidenceError = '';
+    this.pendingSeek = null; this.videoRecoveryAttempted = false; this.currentTime = 0; this.duration = 0;
     this.isLoadingVideo = true;
-    this.violationService.getVideoChunks(sessionId).pipe(takeUntil(this.destroyed)).subscribe({
+    this.violationService.getVideoChunks(sessionId, this.selectedStream).pipe(takeUntil(this.destroyed)).subscribe({
       next: (chunks) => {
+        if (request !== this.videoRequest) return;
         this.isLoadingVideo = false;
         if (chunks && chunks.length > 0) {
           this.videoChunks = chunks;
@@ -149,6 +167,8 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
       },
       error: () => {
+        if (request !== this.videoRequest) return;
+        this.evidenceError = 'Не вдалося завантажити список записів.';
         this.isLoadingVideo = false;
         this.hasVideo = false;
         this.cdr.detectChanges();
@@ -188,7 +208,7 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
     const oldUrl=this.currentVideoUrl, index=this.selectedChunkIndex;
     const offset=this.videoRef?.nativeElement.currentTime ?? this.currentTime;
     const resume=this.isPlaying;
-    this.violationService.getVideoChunks(sessionId, 'camera').pipe(takeUntil(this.destroyed)).subscribe({next: chunks => {
+    this.violationService.getVideoChunks(sessionId, this.selectedStream).pipe(takeUntil(this.destroyed)).subscribe({next: chunks => {
       if (this.currentVideoUrl!==oldUrl || this.selectedChunkIndex!==index) return;
       const renewed=chunks.find(c => c.chunkIndex===index);
       if (!renewed || renewed.url===oldUrl) {
@@ -243,7 +263,35 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
     this.seekToSeconds(targetSec);
   }
 
+  private evidenceRequest = 0;
+  sessionExamId: number | null = null;
+  private drafts = new Map<number, string>();
+  reviewSuccess = '';
+  selectedDecision: 'Confirmed' | 'Dismissed' | 'NoViolation' | 'InsufficientEvidence' | '' = '';
+  selectObservation(v: ViolationAlertDto): void {
+    if (this.reviewing) return;
+    if (this.currentViolation?.id === v.id) return;
+    if (this.currentViolation) this.drafts.set(this.currentViolation.id, this.reviewNotes);
+    const request = ++this.evidenceRequest;
+    this.location.replaceState('/violation/' + v.id);
+    this.currentViolation = v; this.violationId = String(v.id); this.activeMarker = v;
+    this.reviewNotes = this.drafts.get(v.id) ?? v.reviewNotes ?? '';
+    this.selectedDecision = ''; this.reviewError = ''; this.reviewSuccess = '';
+    if (this.evidenceImageUrl) URL.revokeObjectURL(this.evidenceImageUrl);
+    this.evidenceImageUrl = '';
+    if (v.eventId) this.violationService.getEvidence(v.eventId).pipe(takeUntil(this.destroyed)).subscribe({
+      next: blob => { if (request !== this.evidenceRequest) return; this.evidenceImageUrl = URL.createObjectURL(blob); this.cdr.detectChanges(); },
+      error: () => { if (request === this.evidenceRequest) { this.evidenceError = 'Кадр спостереження недоступний. Перевірте запис.'; this.cdr.detectChanges(); } }
+    });
+  }
+  get reviewHistory(): { decision: string; notes: string; at: string; reviewerId: string }[] {
+    try { const entries = JSON.parse(this.currentViolation?.reviewHistoryJson || '[]'); return Array.isArray(entries) ? entries.slice().reverse() : []; } catch { return []; }
+  }
+  saveSelected(next = false): void { if (this.selectedDecision) this.saveReview(this.selectedDecision, next); }
   seekToViolation(v: ViolationAlertDto): void {
+    if (this.reviewing) return;
+    this.selectObservation(v);
+    this.evidenceError = '';
     const chunk = findEvidenceChunk(this.videoChunks, v.relativeTimestampSeconds);
     if (!chunk) { this.evidenceError = 'Фрагмент для цього моменту відсутній або час невідомий.'; return; }
     const offset = v.relativeTimestampSeconds - chunk.metadata!.startOffsetSeconds!;
@@ -265,14 +313,18 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
   getViolationLabel(type: string): string {
     const map: Record<string, string> = {
       'identity_uncertain': 'Особа потребує повторної перевірки',
-      'cell_phone': '📱 Телефон у руках / на столі',
+      'cell_phone': 'Предмет, схожий на телефон',
+      'book': 'Предмет, схожий на книгу',
+      'laptop': 'Предмет, схожий на ноутбук',
+      'extra_person': 'Можлива додаткова людина в кадрі',
+      'analysis_unavailable': 'Тривало недостатня якість кадру',
       'micro_earpiece': '🎧 Мікронавушник у вусі',
       'earphone_detected': '🎧 Навушники виявлено',
       'looking_away_left': '👀 Поворот голови ліворуч',
       'looking_away_right': '👀 Поворот голови праворуч',
       'looking_down': '⬇️ Нахил голови вниз',
       'looking_away': '👀 Відведення погляду',
-      'multiple_faces': '👥 Стороння особа в кадрі',
+      'multiple_faces': 'Виявлено кілька облич — перевірте контекст',
       'face_missing': '🚫 Обличчя не розпізнано у кадрі',
       'voice_detected': '🎙️ Мовленнєва активність',
       'voice_activity': '🎙️ Мовленнєва активність',
@@ -321,12 +373,31 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
   reviewing = false;
   confirmViolation(): void { this.saveReview('Confirmed'); }
   rejectViolation(): void { this.saveReview('Dismissed'); }
-  private saveReview(decision: 'Confirmed' | 'Dismissed'): void {
+  noViolation(): void { this.saveReview('NoViolation'); }
+  insufficientEvidence(): void { this.saveReview('InsufficientEvidence'); }
+  private saveReview(decision: 'Confirmed' | 'Dismissed' | 'NoViolation' | 'InsufficientEvidence', advance = false): void {
     if (!this.currentViolation || this.reviewing) return;
+    if (!this.reviewNotes.trim()) { this.reviewError = 'Поясніть рішення після перегляду контексту.'; return; }
+    const target = this.currentViolation;
     this.reviewing = true;
     this.reviewError = '';
     this.violationService.markAsReviewed(this.currentViolation.id, decision, this.reviewNotes).pipe(takeUntil(this.destroyed)).subscribe({
-      next: () => { this.reviewing = false; this.goBack(); },
+      next: () => {
+        this.reviewing = false; target.reviewDecision = decision; target.reviewNotes = this.reviewNotes;
+        target.isReviewed = true;
+        this.sessionViolations = this.sessionViolations.map(v => v.id === target.id ? target : v);
+        this.reviewSuccess = `Рішення для спостереження #${target.id} збережено.`;
+        if (advance) {
+          const next = this.sessionViolations.find(v => v.id !== target.id && ['Pending','LegacyReviewed'].includes(v.reviewDecision));
+          if (next) this.seekToViolation(next);
+          else this.reviewSuccess += ' Нових спостережень у цій спробі немає.';
+        }
+        this.violationService.getById(target.id).pipe(takeUntil(this.destroyed)).subscribe({next: fresh => {
+          target.reviewHistoryJson = fresh.reviewHistoryJson;
+          this.cdr.detectChanges();
+        }, error: () => {}});
+        this.cdr.detectChanges();
+      },
       error: () => { this.reviewing = false; this.reviewError = 'Рішення не збережено. Перевірте з’єднання та спробуйте повторно.'; this.cdr.detectChanges(); }
     });
   }

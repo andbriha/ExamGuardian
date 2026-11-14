@@ -22,13 +22,6 @@ namespace DataAccessLayer.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("DataAccessLayer.Entities.StudentGroup", b =>
-                {
-                    b.Property<string>("Name").HasMaxLength(100).HasColumnType("character varying(100)");
-                    b.HasKey("Name");
-                    b.ToTable("StudentGroups");
-                });
-
             modelBuilder.Entity("DataAccessLayer.Entities.Exam", b =>
                 {
                     b.Property<int>("Id")
@@ -157,6 +150,9 @@ namespace DataAccessLayer.Migrations
                     b.Property<int>("PassingScoreAtStart")
                         .HasColumnType("integer");
 
+                    b.Property<string>("QuestionScoresJson")
+                        .HasColumnType("text");
+
                     b.Property<string>("SavedAnswersJson")
                         .IsRequired()
                         .HasColumnType("text");
@@ -208,6 +204,13 @@ namespace DataAccessLayer.Migrations
                     b.Property<int>("Points")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ReportCategory")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasDefaultValue("Тестові завдання");
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasMaxLength(1500)
@@ -218,6 +221,17 @@ namespace DataAccessLayer.Migrations
                     b.HasIndex("ExamId");
 
                     b.ToTable("Questions");
+                });
+
+            modelBuilder.Entity("DataAccessLayer.Entities.StudentGroup", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Name");
+
+                    b.ToTable("StudentGroups");
                 });
 
             modelBuilder.Entity("DataAccessLayer.Entities.User", b =>
@@ -235,6 +249,9 @@ namespace DataAccessLayer.Migrations
                         .HasColumnType("character varying(150)");
 
                     b.Property<string>("Group")
+                        .HasColumnType("text");
+
+                    b.Property<string>("IssuedPasswordProtected")
                         .HasColumnType("text");
 
                     b.Property<string>("Login")

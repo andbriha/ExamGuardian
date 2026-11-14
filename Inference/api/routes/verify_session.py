@@ -1,4 +1,3 @@
-from contextlib import closing
 import hashlib
 import json
 import os
@@ -12,14 +11,16 @@ from fastapi.concurrency import run_in_threadpool
 from api.auth import get_current_user
 from api.deps import get_liveness_analyzer, get_identity_analyzer, get_audio_analyzer, verification_slot, audio_slot
 from core.config import settings
-from core.challenges import TASKS, new_sequence, advance
-from models.speech_analyzer import WORDS, get_speech_analyzer, phrase_matches
+from core.challenges import TASKS, new_sequence, advance, frontal
+from core.syllable_challenges import new_phrase, score_transcript
+from models.phoneme_analyzer import get_phoneme_analyzer
+from core.verification_store import state_connection
 
 router = APIRouter()
 LIVENESS_TASKS = list(TASKS)
 STATE_PATH = Path(os.environ.get("VERIFICATION_STATE_PATH", "state/verification.sqlite3"))
 STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-with closing(sqlite3.connect(STATE_PATH)) as db, db:
+with state_connection(STATE_PATH, timeout=5) as db:
     db.execute("BEGIN IMMEDIATE")
     db.execute("CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY, student TEXT, exam INTEGER, task TEXT, expires REAL, baseline_yaw REAL, baseline_pitch REAL, last_hash TEXT, target_since REAL, used INTEGER DEFAULT 0)")
 
@@ -33,21 +34,21 @@ with closing(sqlite3.connect(STATE_PATH)) as db, db:
 
 @router.get("/verify/challenge")
 async def get_challenge(exam_id: int = Query(..., gt=0), user_info: dict = Depends(get_current_user), client_protocol: int | None = None):
-    if client_protocol not in (None, 2, 3):
-        raise HTTPException(426, "Verification requires client protocol 2 or 3")
+    if client_protocol not in (None, 2, 3, 4):
+        raise HTTPException(426, "Verification requires client protocol 2, 3 or 4")
     sequence = new_sequence()
     phrase = None
-    if client_protocol == 3 and (await run_in_threadpool(get_speech_analyzer)).available:
+    if client_protocol == 4 and (await run_in_threadpool(get_phoneme_analyzer)).available:
         # Keep both a pose and expression challenge, followed by speech.
         sequence = [secrets.choice(TASKS[:4]), secrets.choice(TASKS[4:]), "say_phrase"]
-        phrase = " ".join(secrets.SystemRandom().sample(WORDS, 3))
+        phrase = new_phrase()
     challenge_id, task = secrets.token_urlsafe(32), sequence[0]
     expires = time.time() + 240
     images=Path(os.environ.get("INFERENCE_IMAGES_PATH","images"))
     photo=images/(user_info["id"]+".jpg")
     references=images/"references"; references.mkdir(parents=True,exist_ok=True)
     if photo.is_file(): (references/(challenge_id+".jpg")).write_bytes(photo.read_bytes())
-    with closing(sqlite3.connect(STATE_PATH)) as db, db:
+    with state_connection(STATE_PATH) as db:
         expired=db.execute("SELECT id FROM challenges WHERE expires < ?",(time.time()-300,)).fetchall()
         for (old_id,) in expired: (references/(old_id+".jpg")).unlink(missing_ok=True)
         db.execute("DELETE FROM challenges WHERE expires < ?", (time.time() - 300,))
@@ -61,17 +62,21 @@ async def get_challenge(exam_id: int = Query(..., gt=0), user_info: dict = Depen
 @router.get("/verify/capabilities")
 async def verification_capabilities():
     return {"protocol_version": 2, "tasks": list(TASKS), "total_steps": 3,
-            "supported_protocols": [2, 3], "automatic_frames": True, "audio_activity": True,
+            "supported_protocols": [2, 3, 4], "automatic_frames": True, "audio_activity": True,
             "pipeline_version": "fast-motion-1", "recommended_frame_interval_ms": 125,
-            "speech_recognition": (await run_in_threadpool(get_speech_analyzer)).available}
+            "speech_mode": "latin-syllables-v1", "speech_recognition": (await run_in_threadpool(get_phoneme_analyzer)).available}
 
 
 @router.post("/verify/audio")
 async def verification_audio(challenge_id: str, file: UploadFile = File(...),
                              user_info: dict = Depends(get_current_user), analyzer=Depends(get_audio_analyzer),
-                             _slot=Depends(audio_slot)):
-    def valid_challenge():
-        with closing(sqlite3.connect(STATE_PATH)) as db:
+                             _slot=Depends(audio_slot), reset_audio: bool = False):
+    def valid_challenge(connection=None):
+        if connection is None:
+            with state_connection(STATE_PATH) as db:
+                return valid_challenge(db)
+        else:
+            db = connection
             db.row_factory = sqlite3.Row
             row = db.execute("SELECT * FROM challenges WHERE id=?", (challenge_id,)).fetchone()
         if not row or row["student"] != user_info["id"] or row["expires"] <= time.time() or row["used"]:
@@ -85,23 +90,27 @@ async def verification_audio(challenge_id: str, file: UploadFile = File(...),
     result = await run_in_threadpool(analyzer.analyze, data, 16000)
     valid_challenge()
     if row["task"] == "say_phrase" and row["phrase"]:
-        speech = get_speech_analyzer()
+        speech = get_phoneme_analyzer()
         if not speech.available:
             raise HTTPException(503, "Speech recognition unavailable; retry later")
         # Only collect audio after a live frontal anchor for this step.
         motion = json.loads(row["motion"] or "{}")
-        if motion.get("live_until", 0) <= time.time() or "baseline" not in motion:
+        if motion.get("live_until", 0) <= time.time() or time.time()-motion.get("last_seen", 0) > 5 or "baseline" not in motion:
             return {"speech_detected": result["speech_detected"], "speech_seconds": result["speech_seconds"], "speech_ready": False}
-        previous = bytes(row["audio_buffer"] or b"") if time.time()-row["audio_at"] < 4 else b""
-        buffer = (previous + data)[-192000:]  # rolling six seconds, bridges chunk boundaries
+        if row["speech_passed"]:
+            return {"speech_detected": result["speech_detected"], "speech_seconds": result["speech_seconds"],
+                    "speech_ready": True, "phrase_matched": True}
+        previous = bytes(row["audio_buffer"] or b"") if not reset_audio and time.time()-row["audio_at"] < 12 else b""
+        buffer = (previous + data)[-320000:]  # ten seconds including pauses and a repeated utterance
         transcript = await run_in_threadpool(speech.transcribe, buffer)
-        matched = phrase_matches(transcript["transcript"], row["phrase"]) and transcript["confidence"] >= .65
-        with closing(sqlite3.connect(STATE_PATH)) as db, db:
+        matched = score_transcript(transcript, row["phrase"])
+        with state_connection(STATE_PATH) as db:
             db.execute("BEGIN IMMEDIATE")
-            current = valid_challenge()
+            current = valid_challenge(db)
             live = json.loads(current["motion"] or "{}")
             if (current["task"] != "say_phrase" or current["audio_at"] != row["audio_at"]
-                    or live.get("live_until") != motion.get("live_until") or live.get("live_until", 0) <= time.time()
+                    or live.get("anchor_id") != motion.get("anchor_id") or live.get("live_until", 0) <= time.time()
+                    or time.time()-live.get("last_seen", 0) > 5
                     or "baseline" not in live):
                 raise HTTPException(409, "Audio step changed")
             digest = "audio:" + hashlib.sha256(data).hexdigest()
@@ -120,7 +129,7 @@ async def verify_identity_and_liveness(task: str, challenge_id: str, current: Up
     user_info: dict = Depends(get_current_user), identity=Depends(get_identity_analyzer), liveness=Depends(get_liveness_analyzer),
     _slot=Depends(verification_slot)):
     started = time.perf_counter()
-    with closing(sqlite3.connect(STATE_PATH)) as db, db:
+    with state_connection(STATE_PATH) as db:
         db.row_factory = sqlite3.Row
         row = db.execute("SELECT * FROM challenges WHERE id=?", (challenge_id,)).fetchone()
     if not row or row["student"] != user_info["id"] or row["task"] != task or row["expires"] < time.time() or row["used"]:
@@ -138,11 +147,11 @@ async def verify_identity_and_liveness(task: str, challenge_id: str, current: Up
     now = time.time()
     previous_motion = row["motion"] or "{}"
     state = json.loads(previous_motion)
-    anchored = state.get("live_until", 0) > now and now-state.get("last_seen", now) <= 5
-    if not anchored:
+    continuous = now-state.get("last_seen", now) <= 5
+    anchored = state.get("live_until", 0) > now and continuous
+    if not continuous:
         state = {}
-    neutral = (abs(pose.get("yaw", 1)) < .13 and pose.get("eyes_closed", 1) < .3
-               and pose.get("mouth", 1) < .25 and pose.get("smile", 1) < .35)
+    neutral = frontal(pose, task)
     if quality:
         result = {"match": False, "reason": quality}
     elif not anchored and not neutral:
@@ -160,7 +169,9 @@ async def verify_identity_and_liveness(task: str, challenge_id: str, current: Up
     complete = False
     if result.get("match"):
         if not anchored:
-            state = {"live_until": now+30}
+            # A refreshed identity checkpoint need not erase a continuously
+            # observed gesture. Face loss and identity failure still clear it.
+            state.update(live_until=now+30, anchor_id=secrets.token_hex(8), last_seen=now)
         complete, reason = advance(state, task, pose, now)
         if task == "say_phrase" and "baseline" in state:
             complete = bool(row["speech_passed"] and neutral and result.get("match"))
@@ -168,7 +179,7 @@ async def verify_identity_and_liveness(task: str, challenge_id: str, current: Up
         response.update(stage="liveness", reason=reason)
         if complete:
             response["identity_checkpoint"] = True
-            final = await run_in_threadpool(identity.compare, photo.read_bytes(), cur_bytes, check_spoof=True)
+            final = result if not anchored else await run_in_threadpool(identity.compare, photo.read_bytes(), cur_bytes, check_spoof=True)
             response["id_distance"] = final.get("distance")
             if not final.get("match"):
                 complete = False
@@ -177,12 +188,18 @@ async def verify_identity_and_liveness(task: str, challenge_id: str, current: Up
                     # Preserve the completed movement while retrying a frontal
                     # checkpoint. Admission still requires a fresh live match.
                     state.setdefault("confirm_since", now)
-                    if now - state["confirm_since"] > 8:
+                    if now - state["confirm_since"] > 15:
                         state = {}
                         response.update(stage="identity", reason=final.get("reason") or "face_mismatch")
+            else:
+                state.update(live_until=time.time()+30, last_seen=time.time())
+                state.pop("confirm_since", None)
     else:
         # Short blur/exposure fluctuations pause, never advance, a gesture.
-        if anchored and "baseline" in state and quality in ("too_blurry", "too_dark", "too_bright"):
+        if continuous and "baseline" in state and result.get("reason") == "look_forward_first":
+            state["last_seen"] = now
+            response.update(stage="liveness", reason="refresh_identity")
+        elif anchored and "baseline" in state and quality in ("too_blurry", "too_dark", "too_bright"):
             state.setdefault("quality_since", now)
             if now - state["quality_since"] > 2:
                 state = {}
@@ -192,11 +209,15 @@ async def verify_identity_and_liveness(task: str, challenge_id: str, current: Up
             state = {}
     if not quality:
         state.pop("quality_since", None)
+        if state and result.get("match"):
+            # Inference time is not a camera interruption. The next fresh
+            # frame has five seconds after this response to maintain continuity.
+            state["last_seen"] = time.time()
     if complete and state.get("live_until",0) <= time.time():
         complete=False;state={}
         response.update(reason="look_forward_first",identity_confirmed=False)
     response["processing_ms"] = round((time.perf_counter()-started)*1000, 1)
-    with closing(sqlite3.connect(STATE_PATH)) as db, db:
+    with state_connection(STATE_PATH) as db:
         db.row_factory = sqlite3.Row
         db.execute("BEGIN IMMEDIATE")
         # Reload after inference: another worker may have advanced/consumed this challenge.
@@ -216,7 +237,10 @@ async def verify_identity_and_liveness(task: str, challenge_id: str, current: Up
             return response
         step = row["step"] + 1
         if step < len(sequence):
-            db.execute("UPDATE challenges SET step=?,task=?,motion='{}' WHERE id=?", (step,sequence[step],challenge_id))
+            # The successful final checkpoint is also the next task's anchor.
+            # Calibrate the next gesture separately, without repeating identity.
+            next_state = {"live_until": state["live_until"], "last_seen": time.time(), "anchor_id": state.get("anchor_id")}
+            db.execute("UPDATE challenges SET step=?,task=?,motion=?,speech_passed=0,audio_buffer=NULL,audio_at=0 WHERE id=?", (step,sequence[step],json.dumps(next_state),challenge_id))
             response.update(reason="next_action", next_task=sequence[step], step=step+1,
                             phrase=row["phrase"] if sequence[step] == "say_phrase" else None)
             return response
