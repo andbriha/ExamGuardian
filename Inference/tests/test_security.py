@@ -11,6 +11,9 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 import jwt
+import hmac
+import hashlib
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
@@ -24,10 +27,21 @@ from api.auth import get_current_user
 from core.outbox import enqueue, status, should_emit
 
 class TokenContracts(unittest.TestCase):
+    def setUp(self):
+        self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        self.enterContext(patch('api.auth.access_verification_key', return_value=self.key.public_key()))
+        self.enterContext(patch('api.auth.require_login_session'))
+
     def token(self, key=KEY, **overrides):
-        claims = {"sub": str(uuid4()), "role": "Student", "login": "test", "exp": int(time.time())+60, "iss": "ContractIssuer", "aud": "ContractClient"}
+        claims = {"sub": str(uuid4()), "sid": str(uuid4()), "role": "Student", "login": "test", "exp": int(time.time())+60, "iss": "ContractIssuer", "aud": "ContractClient"}
         claims.update(overrides)
-        return HTTPAuthorizationCredentials(scheme="Bearer", credentials=jwt.encode(claims,key,algorithm="HS256"))
+        return HTTPAuthorizationCredentials(scheme="Bearer", credentials=jwt.encode(claims,self.key if key == KEY else rsa.generate_private_key(public_exponent=65537,key_size=2048),algorithm="RS256"))
+
+    def test_shared_mac_is_never_an_access_signer(self):
+        raw = jwt.encode({"sub":str(uuid4()), "sid":str(uuid4()), "role":"Student", "exp":int(time.time())+60, "iss":"ContractIssuer", "aud":"ContractClient"}, KEY, algorithm="HS256")
+        with self.assertRaises(HTTPException) as caught:
+            get_current_user(HTTPAuthorizationCredentials(scheme="Bearer",credentials=raw))
+        self.assertEqual(caught.exception.status_code,401)
 
     def test_valid_student(self):
         self.assertEqual(get_current_user(self.token())["login"], "test")
@@ -74,6 +88,7 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
             setattr(deps,name,lambda: None)
         sys.modules["api.deps"] = deps
         cls.routes = importlib.import_module("api.routes.verify_session")
+        cls.routes.settings.ai_api_key = "isolated-admission-test-api-key-2026"
 
     async def test_legacy_clients_and_missing_model_receive_visual_tasks(self):
         user = {"id": str(uuid4())}
@@ -397,7 +412,7 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(HTTPException): await verify()
         self.assertTrue(result["verified"])
         self.assertEqual(identity.calls, 4)  # one initial + one final checkpoint per action
-        admission=jwt.decode(result["admission_token"],KEY,algorithms=["HS256"],issuer="ContractIssuer",audience="ExamGuardianAdmission")
+        admission=jwt.decode(result["admission_token"],hmac.new(self.routes.settings.ai_api_key.encode(),b"admission:v1",hashlib.sha256).digest(),algorithms=["HS256"],issuer="ContractIssuer",audience="ExamGuardianAdmission")
         self.assertEqual(admission["exam_id"],"9")
         self.assertEqual(admission["sub"],user["id"])
         with self.assertRaises(HTTPException): await verify(b"replayed")

@@ -20,17 +20,21 @@ services:
 
   # 2. C# Backend API
   api:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    pids_limit: 256
     build:
       context: ./Core
       dockerfile: Dockerfile
     container_name: proctoring_api
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - ForwardedHeaders__KnownProxies__0=${PROXY_IP:-172.30.0.10}
       - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
       - Jwt__Key=${JWT__KEY}
       - Jwt__Issuer=${JWT__ISSUER}
       - Jwt__Audience=${JWT__AUDIENCE}
-      - Jwt__LifetimeMinutes=${JWT__LIFETIME_MINUTES:-1440}
+      - Jwt__LifetimeMinutes=${JWT__LIFETIME_MINUTES:-15}
       - AiService__ApiKey=${AiService__ApiKey}
       - INFERENCE_IMAGES_PATH=/app/InferenceImages
       - CredentialKeysPath=/app/credential-keys
@@ -56,6 +60,9 @@ services:
 
   # 3. Python AI Microservice
   ai_service:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    pids_limit: 256
     build:
       context: ./Inference
       dockerfile: Dockerfile
@@ -67,8 +74,7 @@ services:
       - AI_API_KEY=${AiService__ApiKey}
       - API_URL=http://api:8080/api 
       - API_KEY=${AiService__ApiKey}
-      - JWT__KEY=${JWT__KEY}
-      - JWT_SECRET_KEY=${JWT__KEY}
+      - JWT_JWKS_URL=http://api:8080/.well-known/jwks.json
       - JWT__ISSUER=${JWT__ISSUER}
       - JWT__AUDIENCE=${JWT__AUDIENCE}
       - INFERENCE_IMAGES_PATH=/app/images
@@ -76,7 +82,7 @@ services:
       - INFERENCE_WAIT_SECONDS=${INFERENCE_WAIT_SECONDS:-5}
     volumes:
       - shared_images:/app/images
-      - deepface_cache:/root/.deepface
+      - deepface_cache:/home/app/.deepface
       - inference_state:/app/state
     networks:
       - app_network
@@ -107,7 +113,8 @@ services:
       # Map the static landing page folder
       - ./Landing:/usr/share/nginx/html/landing 
     networks:
-      - app_network
+      app_network:
+        ipv4_address: ${PROXY_IP:-172.30.0.10}
     depends_on:
       api:
         condition: service_healthy
@@ -124,3 +131,6 @@ volumes:
 networks:
   app_network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: ${APP_NETWORK_SUBNET:-172.30.0.0/24}

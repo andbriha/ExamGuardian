@@ -3,6 +3,7 @@ namespace BusinessLogicLayer.DTOs.ExamSession;
 
 public class ExamSessionDto
 {
+    public string ReviewVersion { get; set; } = "";
     public int Id { get; set; }
     [JsonIgnore] public string ActiveClientId { get; set; } = "";
     [JsonIgnore] public string? EvidenceClientId { get; set; }

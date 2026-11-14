@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.RateLimiting;
 using BusinessLogicLayer.Dtos.Auth;
 using BusinessLogicLayer.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -7,6 +8,8 @@ using System.Security.Claims;
 namespace WebAPI.Controllers;
 
 [ApiController]
+[EnableRateLimiting("authentication")]
+[RequestSizeLimit(8192)]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
 {
@@ -21,6 +24,7 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Login([FromBody] LoginRequestDto dto)
     {
+        if (!SameOriginRequest()) return StatusCode(403);
         var result = await _authService.LoginAsync(dto);
 
         if (!result.Succeeded || result.Data is null)
@@ -39,6 +43,7 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Refresh()
     {
+        if (!SameOriginRequest()) return StatusCode(403);
         var refreshToken = Request.Cookies["refreshToken"];
 
         if (string.IsNullOrEmpty(refreshToken))
@@ -68,12 +73,19 @@ public class AuthController : ControllerBase
         return Ok(new { Login = login, Role = role });
     }
 
-    [Authorize, HttpPost("logout")]
-    public async Task<IActionResult> Logout([FromServices] DataAccessLayer.Data.AppDbContext db)
-    {
-        var user = await db.Users.FindAsync(Core.Security.SessionAccess.UserId(User));
-        if (user is not null) { user.RefreshToken = null; user.RefreshTokenExpiryTime = null; await db.SaveChangesAsync(); }
-        Response.Cookies.Delete("refreshToken"); return NoContent();
+    [AllowAnonymous, HttpPost("logout")]
+    public async Task<IActionResult> Logout() {
+        if (!SameOriginRequest()) return StatusCode(403);
+        Guid? session = Guid.TryParse(User.FindFirst("sid")?.Value, out var id) ? id : null;
+        await _authService.RevokeAsync(Request.Cookies["refreshToken"], session);
+        Response.Cookies.Delete("refreshToken", new CookieOptions { Path = "/api/Auth", Secure = !HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment(), HttpOnly = true, SameSite = SameSiteMode.Strict });
+        return NoContent();
+    }
+    private bool SameOriginRequest() {
+        if (Request.Headers["Sec-Fetch-Site"] == "cross-site") return false;
+        var origin = Request.Headers.Origin.ToString();
+        return origin.Length == 0 || (Uri.TryCreate(origin, UriKind.Absolute, out var uri) &&
+            uri.Authority.Equals(Request.Host.Value, StringComparison.OrdinalIgnoreCase) && uri.Scheme == Request.Scheme);
     }
 
     private void SetRefreshTokenCookie(string refreshToken)
@@ -82,7 +94,8 @@ public class AuthController : ControllerBase
         {
             HttpOnly = true,
             Secure = Request.IsHttps || !HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment(),
-            SameSite = SameSiteMode.Lax,
+            SameSite = SameSiteMode.Strict,
+            Path = "/api/Auth",
             Expires = DateTime.UtcNow.AddDays(7)
         };
         Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);

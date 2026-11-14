@@ -2,6 +2,7 @@ namespace BusinessLayer.DTOs.Violation
 {
     public class ViolationAlertDto
     {
+        public string ReviewVersion { get; set; } = "";
         public int Id { get; set; }
         public int ExamSessionId { get; set; }
         public string ViolationType { get; set; } = null!;

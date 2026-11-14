@@ -15,6 +15,7 @@
     </nav>
     <section class="members">
       <h3>{{ selected }}</h3><p>Студентів: {{ members.length }} · <a routerLink="/add-student">Створити акаунт студента</a></p>
+      <app-group-access [group]="selected" />
       <app-group-credentials [group]="selected" [members]="members" />
       <p><a routerLink="/import-students" [queryParams]="{group:selected}">+ Додати студентів списком до цієї групи</a></p>
       <form (ngSubmit)="assign()" class="assign-form">

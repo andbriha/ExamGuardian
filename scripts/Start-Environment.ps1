@@ -1,4 +1,4 @@
-param([ValidateSet('dev','production')][string]$Flavor='dev', [ValidateSet('start','check','stop','status')][string]$Action='start')
+param([ValidateSet('dev','production')][string]$Flavor='dev', [ValidateSet('start','check','stop','status','migrate')][string]$Action='start')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot -Parent
 $config=Join-Path $root ".env.$Flavor"
@@ -32,10 +32,11 @@ foreach ($line in [IO.File]::ReadAllLines($config)) {
         $settings[$matches[1]]=$matches[2].Trim()
     }
 }
-if ($Action -in @('start','check')) {
+if ($Action -in @('start','check','migrate')) {
     $required=@('DB_NAME','DB_USER','DB_PASSWORD','JWT__KEY','JWT__ISSUER','JWT__AUDIENCE','AiService__ApiKey','BOOTSTRAP_EXAMINER_LOGIN','BOOTSTRAP_EXAMINER_PASSWORD')
     foreach ($key in $required) {if (!$settings[$key] -or $settings[$key] -match 'REPLACE_|CHANGEME') {throw "Configure $key in .env.$Flavor."}}
     if ($settings['JWT__KEY'].Length -lt 32) {throw 'JWT__KEY must contain at least 32 characters.'}
+    if ($settings['AiService__ApiKey'].Length -lt 32) {throw 'AiService__ApiKey must contain at least 32 characters.'}
     if ($Flavor -eq 'production') {
         foreach ($key in @('TLS_DIRECTORY','PUBLIC_ORIGIN')) {if (!$settings[$key]) {throw "Configure $key in .env.production."}}
         $origin=$null
@@ -48,6 +49,16 @@ $compose=@('compose','--project-directory',$root,'--project-name',"examguardian-
 if ($LASTEXITCODE -ne 0) {throw 'Selected Compose configuration is invalid.'}
 Write-Host "Environment: $Flavor | Project: examguardian-$Flavor"
 if ($Action -eq 'check') {Write-Host 'Configuration valid. No containers changed.';return}
+if ($Action -eq 'migrate') {
+    if ($Flavor -ne 'production') {throw 'DEV applies migrations at startup. The migrate command is for production.'}
+    & docker @compose up -d --wait db
+    if ($LASTEXITCODE -ne 0) {throw 'Database not ready.'}
+    & docker @compose build api
+    if ($LASTEXITCODE -ne 0) {throw 'API build failed.'}
+    & docker @compose run --rm --no-deps api --migrate
+    if ($LASTEXITCODE -ne 0) {throw 'Database migration failed.'}
+    return
+}
 if ($Action -eq 'stop') {& docker @compose stop; if ($LASTEXITCODE -ne 0) {throw 'Stop failed.'};return}
 if ($Action -eq 'status') {& docker @compose ps;return}
 if ($Flavor -eq 'dev') {

@@ -19,6 +19,7 @@
 
 ExamViewModel::ExamViewModel(QObject *parent) : QObject(parent) {
     m_net.setTransferTimeout(15000);
+    m_net.setRedirectPolicy(QNetworkRequest::SameOriginRedirectPolicy);
     m_refreshTimer.setSingleShot(true);
     connect(&m_refreshTimer,&QTimer::timeout,this,[this]{m_auth.refresh(clientServerUrl());});
     connect(&m_auth, &AuthService::loginSucceeded,
@@ -55,7 +56,7 @@ void ExamViewModel::login(const QString &login, const QString &password) {
 QString ExamViewModel::serverUrl() const { return clientServerUrl(); }
 bool ExamViewModel::configureServer(const QString &value) {
     QUrl url(value.trimmed());
-    if (!url.isValid() || url.host().isEmpty() || (url.scheme() != "http" && url.scheme() != "https") || !url.userInfo().isEmpty() || url.hasQuery() || url.hasFragment()) return false;
+    if (!allowedClientOrigin(url) || !m_token.isEmpty()) return false;
     QSettings().setValue("serverUrl", url.toString());
     emit userChanged(); return true;
 }

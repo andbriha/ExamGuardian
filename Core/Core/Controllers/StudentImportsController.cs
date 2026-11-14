@@ -15,6 +15,7 @@ public class StudentImportsController(RosterImportService service) : ControllerB
     private async Task<IActionResult> Run(Func<Task<object>> operation) {
         Response.Headers.CacheControl = "no-store";
         try { return Ok(await operation()); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
         catch (InvalidOperationException ex) { return Conflict(new { message = ex.Message }); }
         catch (Microsoft.EntityFrameworkCore.DbUpdateException) { return Conflict(new { message = "Дані змінилися. Оновіть попередній перегляд; уже створені акаунти не дублюються." }); }

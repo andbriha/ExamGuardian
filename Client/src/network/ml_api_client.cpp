@@ -15,6 +15,7 @@
 
 MlApiClient::MlApiClient(QObject *parent) : QObject(parent) {
     m_manager = new QNetworkAccessManager(this);
+    m_manager->setRedirectPolicy(QNetworkRequest::SameOriginRedirectPolicy);
     m_manager->setTransferTimeout(15000);
 }
 

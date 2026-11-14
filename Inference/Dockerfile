@@ -32,5 +32,12 @@ RUN python download_phoneme_model.py
 # Expose the port that FastAPI will listen on
 EXPOSE 8000
 
+# Match Core's runtime UID on the shared evidence volume. Existing deployments
+# must migrate volume ownership before switching to these images.
+RUN groupadd --gid 1654 app && useradd --uid 1654 --gid 1654 --create-home app && \
+    mkdir -p /app/state /app/images /home/app/.deepface && chown -R app:app /app /home/app
+ENV HOME=/home/app
+USER app
+
 # Start the FastAPI application using Uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -26,7 +26,7 @@ public sealed class AdmissionValidator(IConfiguration config, IWebHostEnvironmen
         try
         {
             var principal = new JwtSecurityTokenHandler { MapInboundClaims = false }.ValidateToken(token, new TokenValidationParameters {
-                ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!)),
+                ValidateIssuerSigningKey = true, IssuerSigningKey = new SymmetricSecurityKey(development ? Encoding.UTF8.GetBytes(config["Jwt:Key"]!) : System.Security.Cryptography.HMACSHA256.HashData(Encoding.UTF8.GetBytes(config["AiService:ApiKey"]!), Encoding.UTF8.GetBytes("admission:v1"))),
                 ValidateIssuer = true, ValidIssuer = config["Jwt:Issuer"], ValidateAudience = true, ValidAudience = development ? "ExamGuardianDevelopmentAdmission" : "ExamGuardianAdmission",
                 ValidateLifetime = true, ClockSkew = TimeSpan.FromSeconds(5), ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
                 NameClaimType = "sub"

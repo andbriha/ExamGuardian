@@ -1,3 +1,4 @@
+import {GroupAccessComponent} from './group-access';
 import { Component, ChangeDetectorRef, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -9,7 +10,7 @@ import { StudentService, StudentDto } from '../../../services/student.service';
 
 @Component({
   selector: 'app-groups', standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, GroupCredentialsComponent],
+  imports: [CommonModule, FormsModule, RouterLink, GroupCredentialsComponent, GroupAccessComponent],
   templateUrl: './groups.html', styleUrl: './groups.css'
 })
 export class GroupsComponent implements OnInit {

@@ -245,7 +245,7 @@
           </div>
   
           <label>Підстава рішення<textarea #notes maxlength="2000" [(ngModel)]="reviewNotes" [disabled]="reviewing" placeholder="Пояснення для протоколу"></textarea></label>
-          <p *ngIf="reviewError" role="alert">{{ reviewError }}</p>
+          <p *ngIf="reviewError" role="alert">{{ reviewError }} <button (click)="reloadObservation()" [disabled]="reviewing">Оновити матеріали, зберігши пояснення</button></p>
           <section *ngIf="currentViolation.violationType === 'voice_activity'">
             <p>Виявлено мовлення. Особу мовця не встановлено. Це не доказ підказки: прослухайте запис у контексті та обґрунтуйте рішення.</p>
             <p *ngIf="speechTranscript">Автоматична розшифровка (можливі помилки): «{{ speechTranscript }}»</p>

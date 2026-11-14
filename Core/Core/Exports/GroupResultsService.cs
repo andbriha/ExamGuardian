@@ -7,7 +7,7 @@ using DataAccessLayer.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Core.Exports;
-public sealed class GroupResultsService(AppDbContext db, SessionAccess access)
+public sealed class GroupResultsService(AppDbContext db, SessionAccess access, RosterAccess roster)
 {
     public static CategoryMark[] Breakdown(ExamSession session) {
         if (string.IsNullOrWhiteSpace(session.ExamSnapshotJson)) return [];
@@ -29,7 +29,7 @@ public sealed class GroupResultsService(AppDbContext db, SessionAccess access)
         } catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException) { return []; }
     }
     public async Task<GroupResultDocument?> Build(ClaimsPrincipal user, int examId, string group) {
-        if (!await access.OwnsExamAsync(user, examId)) return null;
+        if (!await roster.CanGroup(SessionAccess.UserId(user), group) || !await access.OwnsExamAsync(user, examId)) return null;
         var exam = await db.Exams.AsNoTracking().SingleAsync(e => e.Id == examId);
         var students = await db.Users.AsNoTracking().Where(u => u.Role == "Student" && (u.Group ?? "") == group).OrderBy(u => u.FullName).ToListAsync();
         if (students.Count == 0) throw new InvalidOperationException("У вибраній групі немає студентів.");

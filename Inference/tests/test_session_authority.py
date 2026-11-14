@@ -8,8 +8,7 @@ from api.auth import require_active_session
 class SessionAuthority(unittest.IsolatedAsyncioTestCase):
     async def test_core_checks_capability_and_revocation(self):
         client=AsyncMock()
-        with patch('api.auth.httpx.AsyncClient') as factory:
-            factory.return_value.__aenter__.return_value=client
+        with patch('api.auth.core_client', new=AsyncMock(return_value=client)):
             client.get.return_value=Mock(status_code=200,json=lambda:{'id':12})
             self.assertEqual(await require_active_session({'id':'student'},12,'capability'),{'id':12})
             self.assertEqual(client.get.call_args.kwargs['headers']['X-Session-Token'],'capability')

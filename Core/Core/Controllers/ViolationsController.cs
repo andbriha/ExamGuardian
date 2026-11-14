@@ -117,9 +117,11 @@ public class ViolationsController : ControllerBase
         var violation = await _violationService.GetByIdAsync(id);
         if (!User.IsInRole(SystemRoles.Examiner)) return Forbid();
         if (violation is null || !await _access.CanReadAsync(User, violation.ExamSessionId)) return NotFound();
-        try { await _violationService.ReviewAsync(id, SessionAccess.UserId(User), request.Decision, request.Notes); }
+        if (string.IsNullOrEmpty(request.ExpectedVersion)) return StatusCode(428, new {message="Оновіть спостереження перед рішенням."});
+        try { await _violationService.ReviewAsync(id, SessionAccess.UserId(User), request.Decision, request.Notes, request.ExpectedVersion); }
+        catch (InvalidOperationException ex) { return Conflict(new {message=ex.Message}); }
         catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
         return NoContent();
     }
 }
-public record ReviewRequest(string Decision, string? Notes);
+public record ReviewRequest(string Decision, string? Notes, string? ExpectedVersion);

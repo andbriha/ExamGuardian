@@ -11,6 +11,12 @@ namespace Core.Controllers;
 [ApiKey]
 public class InternalController(AppDbContext db, Core.Security.AttemptTokens tokens) : ControllerBase
 {
+    [HttpGet("auth-sessions/{id:guid}")]
+    public async Task<IActionResult> AuthSession(Guid id, Guid studentId) {
+        var session = await db.AuthSessions.AsNoTracking().Include(s => s.User).SingleOrDefaultAsync(s => s.Id == id && s.UserId == studentId);
+        return session is not null && session.RevokedAt is null && session.ExpiresAt > DateTime.UtcNow && session.User.Role == "Student" &&
+            session.CredentialStamp == BusinessLogicLayer.Services.AuthService.Hash(session.User.PasswordHash) ? NoContent() : Unauthorized();
+    }
     [HttpGet("sessions/{id:int}")]
     public async Task<IActionResult> Session(int id, [FromQuery] Guid studentId)
     {

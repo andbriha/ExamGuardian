@@ -10,7 +10,7 @@ namespace Core.Importing.Students;
 
 public record RosterPreview(string Group, RosterRow[] Rows, string? Token);
 public record RosterPlan(Guid Teacher, string Group, RosterRow[] Rows, DateTime Expires);
-public sealed class RosterImportService(AppDbContext db, IDataProtectionProvider protection, IssuedCredentials credentials)
+public sealed class RosterImportService(AppDbContext db, IDataProtectionProvider protection, IssuedCredentials credentials, RosterAccess access)
 {
     private readonly IDataProtector signer = protection.CreateProtector("student-roster-preview-v1");
     public async Task<RosterPreview> Preview(RosterInput input, Guid teacher)
@@ -18,6 +18,7 @@ public sealed class RosterImportService(AppDbContext db, IDataProtectionProvider
         var group = input.Group?.Trim() ?? "";
         if (group.Length is < 1 or > 100 || group.Any(char.IsControl)) throw new ArgumentException("Оберіть або введіть групу (до 100 символів).");
         group = await db.StudentGroups.Where(g => g.Name.ToLower() == group.ToLower()).Select(g => g.Name).FirstOrDefaultAsync() ?? group;
+        if (!await access.CanCreateInGroup(teacher, group)) throw new UnauthorizedAccessException();
         var rows = RosterParser.Parse(input.Text);
         var logins = rows.Where(r => r.Login != "").Select(r => r.Login).ToArray();
         var existing = await db.Users.AsNoTracking().Where(u => u.Group == group || logins.Contains(u.Login.ToLower())).ToListAsync();
@@ -48,6 +49,8 @@ public sealed class RosterImportService(AppDbContext db, IDataProtectionProvider
         catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or JsonException or ArgumentException) { throw new ArgumentException("Попередній перегляд недійсний. Перевірте список ще раз."); }
         if (plan is null || plan.Teacher != teacher || plan.Expires < DateTime.UtcNow) throw new ArgumentException("Попередній перегляд застарів. Перевірте список ще раз.");
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        if (!await access.CanCreateInGroup(teacher, plan.Group)) throw new UnauthorizedAccessException();
+        await access.GrantCreator(teacher, plan.Group);
         var canonicalGroup = await db.StudentGroups.Where(g => g.Name.ToLower() == plan.Group.ToLower()).Select(g => g.Name).FirstOrDefaultAsync();
         if (canonicalGroup is not null && canonicalGroup != plan.Group) throw new InvalidOperationException("Назву групи уточнено. Повторіть попередній перегляд.");
         var logins = plan.Rows.Select(r => r.Login.ToLowerInvariant()).ToArray();

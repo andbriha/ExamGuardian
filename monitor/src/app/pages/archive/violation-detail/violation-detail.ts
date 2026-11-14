@@ -287,6 +287,15 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
   get reviewHistory(): { decision: string; notes: string; at: string; reviewerId: string }[] {
     try { const entries = JSON.parse(this.currentViolation?.reviewHistoryJson || '[]'); return Array.isArray(entries) ? entries.slice().reverse() : []; } catch { return []; }
   }
+  reloadObservation(): void {
+    const target = this.currentViolation;
+    if (!target || this.reviewing) return;
+    this.violationService.getById(target.id).pipe(takeUntil(this.destroyed)).subscribe({next: fresh => {
+      if (this.currentViolation !== target) return;
+      this.drafts.set(target.id, this.reviewNotes); this.currentViolation = null;
+      this.seekToViolation(fresh); this.cdr.detectChanges();
+    },error: () => { this.reviewError = 'Не вдалося оновити спостереження.'; this.cdr.detectChanges(); }});
+  }
   saveSelected(next = false): void { if (this.selectedDecision) this.saveReview(this.selectedDecision, next); }
   seekToViolation(v: ViolationAlertDto): void {
     if (this.reviewing) return;
@@ -381,8 +390,9 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
     const target = this.currentViolation;
     this.reviewing = true;
     this.reviewError = '';
-    this.violationService.markAsReviewed(this.currentViolation.id, decision, this.reviewNotes).pipe(takeUntil(this.destroyed)).subscribe({
+    this.violationService.markAsReviewed(this.currentViolation.id, decision, this.reviewNotes, this.currentViolation.reviewVersion).pipe(takeUntil(this.destroyed)).subscribe({
       next: () => {
+        this.selectedDecision = '';
         this.reviewing = false; target.reviewDecision = decision; target.reviewNotes = this.reviewNotes;
         target.isReviewed = true;
         this.sessionViolations = this.sessionViolations.map(v => v.id === target.id ? target : v);
@@ -393,12 +403,12 @@ export class ViolationDetailComponent implements OnInit, OnDestroy {
           else this.reviewSuccess += ' Нових спостережень у цій спробі немає.';
         }
         this.violationService.getById(target.id).pipe(takeUntil(this.destroyed)).subscribe({next: fresh => {
-          target.reviewHistoryJson = fresh.reviewHistoryJson;
+          Object.assign(target, fresh);
           this.cdr.detectChanges();
         }, error: () => {}});
         this.cdr.detectChanges();
       },
-      error: () => { this.reviewing = false; this.reviewError = 'Рішення не збережено. Перевірте з’єднання та спробуйте повторно.'; this.cdr.detectChanges(); }
+      error: error => { this.reviewing = false; this.reviewError = error.error?.message || 'Рішення не збережено. Перевірте з’єднання та спробуйте повторно.'; this.cdr.detectChanges(); }
     });
   }
 }

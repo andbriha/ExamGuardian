@@ -1,3 +1,4 @@
+#include "local_token_protection.h"
 #include <QUrl>
 #include <QMediaPlayer>
 #include <QFileInfo>
@@ -17,6 +18,7 @@
 
 CoreApiClient::CoreApiClient(QObject *parent) : QObject(parent) {
     m_manager = new QNetworkAccessManager(this);
+    m_manager->setRedirectPolicy(QNetworkRequest::SameOriginRedirectPolicy);
     m_manager->setTransferTimeout(120000);
     m_retryTimer.setSingleShot(true);
     connect(&m_retryTimer, &QTimer::timeout, this, [this] { pumpUploads(); });
@@ -50,7 +52,7 @@ void CoreApiClient::setAuthToken(const QString &token) {
     if (queuePath == m_queuePath) { pumpUploads(); return; }
     m_queuePath = queuePath;
     QFile tokenFile(directory + "/evidence-tokens.json");
-    if (tokenFile.open(QIODevice::ReadOnly)) m_evidenceTokens = QJsonDocument::fromJson(tokenFile.readAll()).object();
+    if (tokenFile.open(QIODevice::ReadOnly)) m_evidenceTokens = QJsonDocument::fromJson(unprotectLocalTokens(tokenFile.readAll())).object();
     QFile manifest(m_queuePath);
     if (manifest.open(QIODevice::ReadOnly)) m_queue = QJsonDocument::fromJson(manifest.readAll()).array();
     emit pendingUploadsChanged(m_queue.size());
@@ -74,7 +76,8 @@ void CoreApiClient::setAttemptTokens(int sessionId, const QString &attempt, cons
     QSaveFile file(QFileInfo(m_queuePath).absolutePath()+"/evidence-tokens.json");
     if (!file.open(QIODevice::WriteOnly)) { emit videoUploadFailed("Не вдалося зберегти дозвіл доставки запису."); return; }
     file.setPermissions(QFileDevice::ReadOwner|QFileDevice::WriteOwner);
-    if (file.write(QJsonDocument(m_evidenceTokens).toJson())<0 || !file.commit()) emit videoUploadFailed("Не вдалося зберегти дозвіл доставки запису.");
+    const auto protectedTokens = protectLocalTokens(QJsonDocument(m_evidenceTokens).toJson());
+    if (protectedTokens.isEmpty() || file.write(protectedTokens)<0 || !file.commit()) emit videoUploadFailed("Не вдалося зберегти дозвіл доставки запису.");
     pumpUploads();
 }
 bool CoreApiClient::persistQueue() {

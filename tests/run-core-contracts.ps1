@@ -16,7 +16,7 @@ try {
     $ready=$false
     for ($i=0;$i -lt 30;$i++) { docker exec $db pg_isready -U tester -d examguardian_test *> $null; if ($LASTEXITCODE -eq 0) {$ready=$true;break}; Start-Sleep -Seconds 1 }
     if (!$ready) {throw 'Test database not ready.'}
-    docker run -d --name $api --network $network -p 127.0.0.1:55111:8080 -e 'ConnectionStrings__DefaultConnection=Host=db;Database=examguardian_test;Username=tester;Password=examguardian-test-only' -e Jwt__Key=examguardian-integration-test-signing-key-2026 -e Jwt__Issuer=ExamGuardianTest -e Jwt__Audience=ExamGuardianTestClient -e AiService__ApiKey=examguardian-integration-test-ai-key -e Bootstrap__ExaminerLogin=admin -e Bootstrap__ExaminerPassword=Contract-Bootstrap-Password-2026! -e "Development__AllowIdentityBypass=$devFlag" -e ASPNETCORE_ENVIRONMENT=Development -e Logging__LogLevel__Default=Warning examguardian-core-contract:local | Out-Null; Check-Exit 'Test API'
+    docker run -d --name $api --network $network -p 127.0.0.1:55111:8080 -e 'ConnectionStrings__DefaultConnection=Host=db;Database=examguardian_test;Username=tester;Password=examguardian-test-only' -e Jwt__Key=examguardian-integration-test-signing-key-2026 -e Jwt__Issuer=ExamGuardianTest -e Jwt__Audience=ExamGuardianTestClient -e AiService__ApiKey=examguardian-integration-test-ai-key -e Bootstrap__ExaminerLogin=admin -e Bootstrap__ExaminerPassword=Contract-Bootstrap-Password-2026! -e "Development__AllowIdentityBypass=$devFlag" -e ASPNETCORE_ENVIRONMENT=Development -e Security__AuthRequestsPerMinute=10000 -e Logging__LogLevel__Default=Warning examguardian-core-contract:local | Out-Null; Check-Exit 'Test API'
     $ready=$false
     for ($i=0;$i -lt 45;$i++) { try { $response=Invoke-WebRequest http://127.0.0.1:55111/health/ready -UseBasicParsing -TimeoutSec 1; if ($response.StatusCode -eq 200) {$ready=$true;break} } catch {}; Start-Sleep -Seconds 1 }
     if (!$ready) {docker logs $api; throw 'Test API not ready.'}
@@ -30,6 +30,7 @@ try {
     $env:EXAMGUARDIAN_TEST_VIDEO=Join-Path $media 'contract.mp4'
     & $PythonExecutable (Join-Path $PSScriptRoot 'test_core_contract.py'); Check-Exit 'Core contracts'
     & $PythonExecutable (Join-Path $PSScriptRoot 'test_group_workflow.py'); Check-Exit 'Group workflow contracts'
+    & $PythonExecutable (Join-Path $PSScriptRoot 'test_security_workflow.py'); Check-Exit 'Security workflow contracts'
     & $PythonExecutable (Join-Path $PSScriptRoot 'test_retention_contract.py'); Check-Exit 'Retention contract'
 } finally {
     if (!$KeepEnvironment) { docker rm --force $api $db 2>$null | Out-Null; docker network rm $network 2>$null | Out-Null }

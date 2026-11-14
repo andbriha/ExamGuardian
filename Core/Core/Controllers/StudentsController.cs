@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using Core.Security;
+using DataAccessLayer.Data;
 using BusinessLogicLayer.Constants;
 using BusinessLogicLayer.DTOs.User;
 using BusinessLogicLayer.Interfaces;
@@ -13,13 +16,15 @@ public class StudentsController : ControllerBase
 {
     private readonly IUserService _userService;
     private readonly IWebHostEnvironment _env;
+    private readonly RosterAccess _roster;
+    private readonly AppDbContext _db;
 
     public StudentsController(
         IUserService userService,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env, RosterAccess roster, AppDbContext db)
     {
         _userService = userService;
-        _env = env;
+        _env = env; _roster = roster; _db = db;
     }
 
 
@@ -28,7 +33,8 @@ public class StudentsController : ControllerBase
     public async Task<IActionResult> GetAll()
     {
         var students = await _userService.GetAllStudentsAsync();
-        return Ok(students);
+        var groups = await _roster.Groups(SessionAccess.UserId(User));
+        return Ok(groups is null ? students : students.Where(s => groups.Contains(s.Group ?? "")));
     }
 
     [HttpGet("{id:guid}")]
@@ -36,6 +42,7 @@ public class StudentsController : ControllerBase
     public async Task<IActionResult> GetById(Guid id)
     {
         if (User.IsInRole(SystemRoles.Student) && Core.Security.SessionAccess.UserId(User) != id) return NotFound();
+        if (User.IsInRole(SystemRoles.Examiner) && !await _roster.CanStudent(User, id)) return NotFound();
         var student = await _userService.GetByIdAsync(id);
         return student is null ? NotFound() : Ok(student);
     }
@@ -46,10 +53,16 @@ public class StudentsController : ControllerBase
     {
 
         dto.Role = SystemRoles.Student;
+        var group = string.IsNullOrWhiteSpace(dto.Group) ? "Основна група" : dto.Group.Trim();
+        if (!await _roster.CanCreateInGroup(SessionAccess.UserId(User), group)) return Forbid();
 
         try
         {
+            await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            if (!await _roster.CanCreateInGroup(SessionAccess.UserId(User), group)) return Forbid();
+            await _roster.GrantCreator(SessionAccess.UserId(User), group);
             var created = await _userService.CreateAsync(dto);
+            await transaction.CommitAsync();
             return CreatedAtAction(nameof(GetById),
                 new { id = created.Id }, created);
         }
@@ -82,6 +95,7 @@ public class StudentsController : ControllerBase
         if (photo is null || photo.Length == 0)
             return BadRequest(new { message = "Файл порожній" });
 
+        if (User.IsInRole(SystemRoles.Examiner) && !await _roster.CanStudent(User, id)) return NotFound();
         var student = await _userService.GetByIdAsync(id);
         if (student is null) return NotFound();
 
@@ -110,6 +124,7 @@ public class StudentsController : ControllerBase
     [Authorize(Roles = SystemRoles.Examiner)]
     public async Task<IActionResult> GetPhoto(Guid id)
     {
+        if (User.IsInRole(SystemRoles.Examiner) && !await _roster.CanStudent(User, id)) return NotFound();
         var student = await _userService.GetByIdAsync(id);
         if (student is null)
             return NotFound(new { message = "Студента не знайдено" });
@@ -129,6 +144,7 @@ public class StudentsController : ControllerBase
     [Authorize(Roles = SystemRoles.Examiner)]
     public async Task<IActionResult> Delete(Guid id)
     {
+        if (!await _roster.CanStudent(User, id)) return NotFound();
         try
         {
             await _userService.DeleteAsync(id);

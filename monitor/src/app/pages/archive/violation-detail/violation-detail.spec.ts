@@ -15,10 +15,10 @@ describe('Manual review', () => {
   }
   it('persists distinct confirmation and dismissal with the reason', () => {
     const {component,api}=setup(); api.markAsReviewed.and.returnValue(of(undefined));
-    component.confirmViolation(); expect(api.markAsReviewed).toHaveBeenCalledWith(7,'Confirmed','Context checked');
-    component.rejectViolation(); expect(api.markAsReviewed).toHaveBeenCalledWith(7,'Dismissed','Context checked');
-    component.noViolation(); expect(api.markAsReviewed).toHaveBeenCalledWith(7,'NoViolation','Context checked');
-    component.insufficientEvidence(); expect(api.markAsReviewed).toHaveBeenCalledWith(7,'InsufficientEvidence','Context checked');
+    component.confirmViolation(); expect(api.markAsReviewed).toHaveBeenCalledWith(7,'Confirmed','Context checked',undefined);
+    component.rejectViolation(); expect(api.markAsReviewed).toHaveBeenCalledWith(7,'Dismissed','Context checked',undefined);
+    component.noViolation(); expect(api.markAsReviewed).toHaveBeenCalledWith(7,'NoViolation','Context checked',undefined);
+    component.insufficientEvidence(); expect(api.markAsReviewed).toHaveBeenCalledWith(7,'InsufficientEvidence','Context checked',undefined);
   });
   it('does not claim success or navigate away when the save failed', () => {
     const {component,api,location}=setup(); api.markAsReviewed.and.returnValue(throwError(() => new Error('offline')));
@@ -37,7 +37,7 @@ describe('Manual review', () => {
     expect(component.currentViolation?.id).toBe(8);
     expect(component.reviewNotes).toBe('');
     component.reviewNotes='Second reason'; component.noViolation();
-    expect(api.markAsReviewed).toHaveBeenCalledWith(8,'NoViolation','Second reason');
+    expect(api.markAsReviewed).toHaveBeenCalledWith(8,'NoViolation','Second reason',undefined);
     component.seekToViolation(first); expect(component.reviewNotes).toBe('Context checked');
     component.seekToViolation(second); expect(component.reviewNotes).toBe('Second reason');
   });
@@ -61,7 +61,7 @@ describe('Manual review', () => {
     const first=component.currentViolation!;
     component.sessionViolations=[first,{...first,id:8,reviewDecision:'InsufficientEvidence'},{...first,id:9,reviewNotes:''}];
     component.selectedDecision='NoViolation'; component.saveSelected(true);
-    expect(api.markAsReviewed).toHaveBeenCalledWith(7,'NoViolation','Context checked');
+    expect(api.markAsReviewed).toHaveBeenCalledWith(7,'NoViolation','Context checked',undefined);
     expect(component.currentViolation?.id).toBe(9); expect(component.reviewNotes).toBe('');
   });
   it('ignores an obsolete video source response after switching streams', () => {

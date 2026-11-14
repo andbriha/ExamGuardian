@@ -3,6 +3,7 @@ services:
     build:
       dockerfile: Dockerfile.dev
     environment:
+      ForwardedHeaders__KnownProxies__0: ${PROXY_IP:-172.31.0.10}
       ASPNETCORE_ENVIRONMENT: Development
       Development__AllowIdentityBypass: ${DEV_ALLOW_IDENTITY_BYPASS:-true}
       DOTNET_USE_POLLING_FILE_WATCHER: "1"
@@ -39,6 +40,9 @@ services:
       retries: 12
       start_period: 30s
   nginx:
+    networks:
+      app_network:
+        ipv4_address: ${PROXY_IP:-172.31.0.10}
     image: nginx:alpine
     build: !reset null
     volumes:
@@ -67,3 +71,9 @@ services:
       start_period: 15s
 volumes:
   core_artifacts:
+
+networks:
+  app_network:
+    ipam:
+      config: !override
+        - subnet: ${APP_NETWORK_SUBNET:-172.31.0.0/24}

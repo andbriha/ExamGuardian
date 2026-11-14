@@ -7,16 +7,23 @@ namespace Core.Seeding;
 
 public static class DbInitializer
 {
-    public static void Initialize(IServiceProvider serviceProvider)
+    public static void Initialize(IServiceProvider serviceProvider, bool migrate = false)
     {
         using var scope = serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
 
-        context.Database.Migrate();
         var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+        if (migrate || config.GetValue<bool?>("Database:AutoMigrate") == true || (config["Database:AutoMigrate"] is null && environment.IsDevelopment())) context.Database.Migrate();
+        else if (context.Database.GetPendingMigrations().Any()) throw new InvalidOperationException("Database migration required. Run Api.dll --migrate before starting production replicas.");
 
 
+        var bootstrapLogin = config["Bootstrap:ExaminerLogin"];
+        if (!string.IsNullOrWhiteSpace(bootstrapLogin) && !context.Users.Any(u => u.CanManageRoster)) {
+            var existingAdmin = context.Users.SingleOrDefault(u => u.Role == SystemRoles.Examiner && u.Login == bootstrapLogin);
+            if (existingAdmin is not null) { existingAdmin.CanManageRoster = true; context.SaveChanges(); }
+        }
         if (!context.Users.Any(u => u.Role == SystemRoles.Examiner))
         {
             var login = config["Bootstrap:ExaminerLogin"];
@@ -30,6 +37,7 @@ public static class DbInitializer
                 Login = login,
 
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                CanManageRoster = true,
                 Role = SystemRoles.Examiner
             });
 
