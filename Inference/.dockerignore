@@ -7,3 +7,5 @@ images
 evaluation-results
 .git
 *.log
+
+models/phoneme-model

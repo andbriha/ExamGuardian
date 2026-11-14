@@ -1,4 +1,4 @@
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { MonitorComponent } from './monitor';
 
 describe('Monitor session integrity', () => {
@@ -43,5 +43,16 @@ describe('Monitor signed video access', () => {
     component.onVideoError(); expect(component.currentVideoUrl).toBe('renewed');
     component.onMetadataLoaded(); expect(video.currentTime).toBe(23); expect(video.pause).toHaveBeenCalled();
     component.onVideoError(); expect(service.getVideoChunks).toHaveBeenCalledTimes(1); expect(component.evidenceError).not.toBe('');
+  });
+});
+
+describe('Queue recovery', () => {
+  it('keeps the last queue on failure and separates waiting observations', () => {
+    const api={getUnreviewed:jasmine.createSpy().and.returnValue(throwError(() => new Error('offline')))};
+    const c=new MonitorComponent({} as never,{} as never,{} as never,api as never,{} as never,{detectChanges:()=>{}} as never);
+    c.alerts=[{id:'1',studentName:'Anna',type:'Book',raw:{reviewDecision:'Pending'}},{id:'2',studentName:'Anna',type:'Voice',raw:{reviewDecision:'InsufficientEvidence'}}] as never;
+    c.refreshAlerts(); expect(c.alerts.length).toBe(2); expect(c.alertsError).not.toBe('');
+    expect(c.visibleAlerts.map(a=>a.id)).toEqual(['1']); c.queueFilter='waiting'; expect(c.visibleAlerts.map(a=>a.id)).toEqual(['2']);
+    api.getUnreviewed.and.returnValue(of([])); c.refreshAlerts(); expect(c.alertsError).toBe(''); expect(c.alerts.length).toBe(0);
   });
 });

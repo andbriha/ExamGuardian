@@ -20,7 +20,6 @@ class DevelopmentRouting(unittest.TestCase):
         landing = Path(__file__).resolve().parents[1] / 'Landing'
         for url_name, filename in (
             ('Online_Proctoring_System_Setup.exe', 'ExamGuardian_Setup_Dev.exe'),
-            ('Online_Proctoring_System_Client.exe', 'ExamGuardian_Client_Dev.exe'),
             ('Online_Proctoring_System_Client.zip', 'ExamGuardian_Client_Dev.zip'),
         ):
             with self.subTest(filename=filename):
@@ -29,6 +28,15 @@ class DevelopmentRouting(unittest.TestCase):
                     self.assertEqual(int(response.headers['Content-Length']), (landing / filename).stat().st_size)
                     self.assertEqual(response.headers['Content-Disposition'], f'attachment; filename="{filename}"')
                     self.assertEqual(response.headers['Cache-Control'], 'no-store')
+
+    def test_legacy_client_exe_urls_redirect_to_complete_portable_zip(self):
+        opener = urllib.request.build_opener(NoRedirect)
+        for filename in ('Online_Proctoring_System_Client.exe', 'ExamGuardian_Client_Dev.exe'):
+            with self.subTest(filename=filename):
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    opener.open(ORIGIN + '/landing/' + filename, timeout=15)
+                self.assertEqual(caught.exception.code, 302)
+                self.assertEqual(caught.exception.headers['Location'], '/landing/Online_Proctoring_System_Client.zip')
 
     def test_wrong_flavor_and_missing_downloads_are_not_html(self):
         for filename in ('ExamGuardian_Setup_Prod.exe', 'ExamGuardian_Client_Prod.zip', 'missing.exe', 'missing.zip'):

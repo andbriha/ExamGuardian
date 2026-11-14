@@ -46,6 +46,7 @@ public class ExamService : IExamService
             throw new ArgumentException("Title, duration and at least one question are required.");
         if (dto.Questions.Any(q => string.IsNullOrWhiteSpace(q.Text) || q.Points < 1 || q.Points > 1000 || q.Options.Count < 2 || q.Options.Count > 10 || q.Options.Any(string.IsNullOrWhiteSpace) || q.CorrectIndex < 0 || q.CorrectIndex >= q.Options.Count))
             throw new ArgumentException("Invalid question, points or correct option.");
+        if (dto.Questions.Any(q => string.IsNullOrWhiteSpace(q.ReportCategory) || q.ReportCategory.Length > 80 || q.ReportCategory.Any(char.IsControl))) throw new ArgumentException("Report category must contain 1 to 80 printable characters.");
         if (dto.AllowedObjects.Any(o => o is not ("book" or "laptop" or "cell_phone"))) throw new ArgumentException("Invalid allowed object type.");
         if (dto.ScheduledStartTime?.Kind == DateTimeKind.Unspecified) throw new ArgumentException("Scheduled time must include a UTC or timezone offset.");
         DateTime? scheduled = dto.ScheduledStartTime?.ToUniversalTime();
@@ -75,7 +76,7 @@ public class ExamService : IExamService
             Questions = dto.Questions.Select((q, i) => new Question
             {
                 Text = q.Text,
-                Points = q.Points,
+                Points = q.Points, ReportCategory = q.ReportCategory.Trim(),
                 CorrectIndex = q.CorrectIndex,
                 OrderIndex = i,
                 Options = q.Options.Select((o, j) => new QuestionOption
@@ -157,7 +158,7 @@ public class ExamService : IExamService
         {
             Id = q.Id,
             Text = q.Text,
-            Points = q.Points,
+            Points = q.Points, ReportCategory = q.ReportCategory.Trim(),
             OrderIndex = q.OrderIndex,
             Options = q.Options?.Select(o => new QuestionOptionDto
             {

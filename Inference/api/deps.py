@@ -1,5 +1,3 @@
-import asyncio
-from fastapi import HTTPException
 from functools import lru_cache
 from models.liveness_analyzer import LivenessAnalyzer
 from models.identity_analyzer  import IdentityAnalyzer
@@ -25,38 +23,27 @@ def get_audio_analyzer() -> AudioAnalyzer:
         aggressiveness=settings.vad_aggressiveness,
         threshold_seconds=settings.vad_threshold_seconds,
     )
-_analysis_lock = asyncio.Semaphore(1)
-_verification_lock = asyncio.Semaphore(1)
-_audio_lock = asyncio.Semaphore(1)
+# These shared model instances are not independent inference workers. Increasing
+# semaphore counts alone can race model state or multiply GPU memory use.
+from core.capacity import CapacityGate
+_gates = {name: CapacityGate(name, settings.inference_queue_limit, settings.inference_wait_seconds)
+          for name in ("analysis", "verification", "audio")}
+
+
+def capacity_status():
+    return {name: gate.snapshot() for name, gate in _gates.items()}
+
 
 async def verification_slot():
-    # Continuous YOLO analysis must not stall active gesture sampling.
-    try:
-        await asyncio.wait_for(_verification_lock.acquire(), timeout=5)
-    except asyncio.TimeoutError:
-        raise HTTPException(429, "Verification capacity reached")
-    try:
+    async with _gates["verification"].slot():
         yield
-    finally:
-        _verification_lock.release()
+
 
 async def audio_slot():
-    # ASR and VAD have their own bounded queue, independent of camera sampling.
-    try:
-        await asyncio.wait_for(_audio_lock.acquire(), timeout=5)
-    except asyncio.TimeoutError:
-        raise HTTPException(429, "Audio capacity reached")
-    try:
+    async with _gates["audio"].slot():
         yield
-    finally:
-        _audio_lock.release()
+
 
 async def analysis_slot():
-    try:
-        await asyncio.wait_for(_analysis_lock.acquire(), timeout=5)
-    except asyncio.TimeoutError:
-        raise HTTPException(429, "Analysis capacity reached. Retry shortly.")
-    try:
+    async with _gates["analysis"].slot():
         yield
-    finally:
-        _analysis_lock.release()

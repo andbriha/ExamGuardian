@@ -27,6 +27,7 @@ RUN pip install --no-cache-dir -r requirements.lock
 # Copy the rest of the inference source code
 COPY . .
 RUN python download_speech_model.py
+RUN python download_phoneme_model.py
 
 # Expose the port that FastAPI will listen on
 EXPOSE 8000

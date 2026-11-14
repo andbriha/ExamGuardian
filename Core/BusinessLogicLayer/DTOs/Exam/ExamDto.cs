@@ -26,6 +26,7 @@ public class ExamDto
 }
 public class QuestionDto
 {
+    public string ReportCategory { get; set; } = "Тестові завдання";
     public int Id { get; set; }
     public string Text { get; set; } = null!;
     public int Points { get; set; }

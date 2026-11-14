@@ -17,8 +17,11 @@ ApplicationWindow {
     property string uploadStatus: ""
     property bool recordingPrepared: false
     property string technicalStatus: ""
+    property bool cameraNeedsAttention: false
+    property bool microphoneNeedsAttention: false
+    Timer { id: microphoneHelpDelay; interval: 10000; onTriggered: mainWindow.microphoneNeedsAttention = mainWindow.isExamActive }
+    Timer { id: cameraHelpDelay; interval: 10000; onTriggered: mainWindow.cameraNeedsAttention = mainWindow.isExamActive }
     property string lastEnvironmentObservation: ""
-    property string analysisStatus: "Очікування аналізу"
     property string screenVideoPath: ""
     property double cameraChunkStart: 0
     property double screenChunkStart: 0
@@ -29,8 +32,15 @@ ApplicationWindow {
     property bool screenFault: false
     Connections {
         target: MediaVM
+        function onCameraAvailabilityChanged(available) {
+            if (available || !mainWindow.isExamActive) { cameraHelpDelay.stop(); mainWindow.cameraNeedsAttention = false }
+            else if (!cameraHelpDelay.running && !mainWindow.cameraNeedsAttention) cameraHelpDelay.start()
+        }
+        function onMicrophoneAvailabilityChanged(available) {
+            if (available) { microphoneHelpDelay.stop(); mainWindow.microphoneNeedsAttention = false }
+            else if (!microphoneHelpDelay.running && !mainWindow.microphoneNeedsAttention) microphoneHelpDelay.start()
+        }
         function onEvidenceFinalized(status) { uploadStatus = status === "Delivered" ? "Передачу записів підтверджено. Висновок надасть викладач." : "Докази доставлено частково. Потрібна перевірка викладача." }
-        function onAnalysisStatusChanged(message) { analysisStatus = message }
         function onPendingUploadsChanged(count) { pendingVideoUploads = count; uploadStatus = count === 0 ? "Черга передачі відео порожня" : "Матеріалів у черзі: " + count }
         function onVideoUploadFailed(message) { uploadStatus = message }
         function onRecordingReady(nextIndex) { mainWindow.startRecording(nextIndex) }
@@ -189,6 +199,8 @@ ApplicationWindow {
             MediaVM.stopContinuousProctoring()
 
             isExamActive = false // Останавливаем логику нарезки
+            cameraHelpDelay.stop(); cameraNeedsAttention = false
+            microphoneHelpDelay.stop(); microphoneNeedsAttention = false
 
 
             globalRecorder.stop()

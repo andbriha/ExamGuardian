@@ -50,6 +50,7 @@ if ($InnoCompiler) {
 }
 $portable = Join-Path $output "ExamGuardian_Client_$suffix.zip"
 Compress-Archive -Path (Join-Path $deploy '*') -DestinationPath $portable -CompressionLevel Optimal
+& (Join-Path $source 'test-portable.ps1') -ArchivePath $portable -Flavor $Flavor
 $commit = git -C $source rev-parse HEAD
 $dirty = [bool](git -C $source status --porcelain)
 $sourceHashes = @{}
@@ -64,7 +65,6 @@ if ($PublishToLanding) {
     $landing = Join-Path (Split-Path $source -Parent) 'Landing'
     $artifacts = @{
         "ExamGuardian_Setup_$suffix.exe" = Join-Path $output "ExamGuardian_Setup_$suffix.exe"
-        "ExamGuardian_Client_$suffix.exe" = $exe
         "ExamGuardian_Client_$suffix.zip" = $portable
         "release-manifest_$suffix.json" = Join-Path $output 'release-manifest.json'
     }

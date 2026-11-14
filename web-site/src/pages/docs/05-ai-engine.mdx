@@ -34,9 +34,18 @@ Before the exam begins, the system verifies **both identity and liveness** using
 | `"nod"` | Pitch angle must increase then decrease (vertical head movement) |
 
 ### Frontal liveness checkpoints
-Each action begins with a neutral frontal frame that passes both reference identity and passive anti-spoofing. Its server-owned anchor lasts at most 30 seconds and is invalidated by a face/identity/quality failure or a gap over five seconds. During the requested gesture every fresh usable frame still needs a reference identity match; the passive frontal classifier is not applied to deliberately turned faces or closed eyes. Returning to neutral must pass passive anti-spoofing again before an action is accepted. A negative return checkpoint waits for a new neutral frame without crediting the action or issuing admission. Thresholds remain unchanged.
+The first action starts with a frontal reference-identity and passive anti-spoof checkpoint. During its 30-second window, intermediate frames run landmark and quality checks. Every completed action requires a new frontal identity/anti-spoof checkpoint; that same successful checkpoint anchors the next action, avoiding an immediate duplicate check. Each new action calibrates its own baseline. Missing/multiple faces or a camera gap over five seconds invalidate continuity; a short blur/exposure pause preserves progress. A successful identity renewal preserves continuously observed movement. Biometric thresholds are unchanged.
 
-A successful checkpoint is not proof of general resistance to replay or deepfakes; labelled live-person and attack trials are still required. The UI distinguishes preparing the neutral baseline, performing the action and confirming the frontal return.
+The client shows the task throughout calibration, holding and returning, reports wrong-direction turns and displays the server's step count. A natural resting smile does not block head-motion calibration. Movement alone never grants admission.
+
+### Speech tasks (protocol 3)
+
+Verification protocol 4 uses three Latin syllables **MA /ma/, MI /mi/, MU /mu/** in random order, with fixed audio samples in Qt. These are sounds, not words or letter names. Capture pauses during sample playback and for 500 ms afterwards; the next upload resets the server audio window. A dedicated offline [multilingual phoneme model](https://huggingface.co/facebook/wav2vec2-lv-60-espeak-cv-ft) recognizes sound order without receiving the expected answer. Equivalent vowel-length variants are grouped; each matched phoneme needs a model score of at least 0.65. Partial/reordered sequences fail; a complete retry is allowed. Missing models and older protocol 2/3 clients receive visual tasks at issuance, never a silently passed speech task. The audio window is bounded to ten seconds. Camera identity and anti-spoof checkpoints remain required.
+
+Provision with `python download_phoneme_model.py` in Inference after installing dependencies; Docker builds do this automatically. Development bind mounts need the model in the mounted directory. The pinned Apache-2.0 weights add about 1.3 GB; `PHONEME_MODEL_PATH` overrides their location. Restart AI after installation. Ukrainian Vosk remains separate, only for optional exam transcripts. Fixed samples define pronunciation, but accuracy across accents and microphones still requires human evaluation. Six synthetic reference permutations, incorrect orders, silence and noise are covered by `python -m tests.check_phoneme_model`; this is an integration check, not an accuracy claim. This change does not translate the rest of the UI or provide speaker identification/replay protection.
+
+Speech recognition checks content, not the speaker's identity. Final admission still requires a live frontal face match. If ASR is unavailable when a challenge is created, the server uses three visual tasks; an already-issued speech task never passes merely because the microphone detects sound. Real-device and replay/attack trials remain necessary; protocol tests do not establish biometric accuracy.
+
 
 ---
 

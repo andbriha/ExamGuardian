@@ -29,6 +29,7 @@ try {
     $env:EXAMGUARDIAN_TEST_API_CONTAINER=$api
     $env:EXAMGUARDIAN_TEST_VIDEO=Join-Path $media 'contract.mp4'
     & $PythonExecutable (Join-Path $PSScriptRoot 'test_core_contract.py'); Check-Exit 'Core contracts'
+    & $PythonExecutable (Join-Path $PSScriptRoot 'test_group_workflow.py'); Check-Exit 'Group workflow contracts'
     & $PythonExecutable (Join-Path $PSScriptRoot 'test_retention_contract.py'); Check-Exit 'Retention contract'
 } finally {
     if (!$KeepEnvironment) { docker rm --force $api $db 2>$null | Out-Null; docker network rm $network 2>$null | Out-Null }

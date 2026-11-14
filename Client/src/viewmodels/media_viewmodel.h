@@ -6,6 +6,7 @@
 #include "media_validator.h"
 #include "ml_api_client.h"
 #include "core_api_client.h"
+#include "pronunciation_player.h"
 
 class MediaViewModel : public QObject {
     Q_OBJECT
@@ -16,6 +17,7 @@ public:
     Q_INVOKABLE void startVerificationSession();
     Q_INVOKABLE void stopVerificationSession();
     Q_INVOKABLE void setVideoSink(QVideoSink *sink);
+    Q_INVOKABLE void playPronunciation() { if (m_verifying) m_pronunciation.play(m_syllables); }
 
     Q_INVOKABLE void startContinuousProctoring(int elapsedSeconds);
     Q_INVOKABLE void stopContinuousProctoring();
@@ -32,6 +34,9 @@ public:
 
     void queueObservation(int sessionId, const QString &type, int seconds, const QString &metadata) { m_coreApi.reportViolation(sessionId,type,1.0,seconds,metadata); }
 signals:
+    void syllablesChanged(const QString &syllables);
+    void pronunciationPlayingChanged(bool playing);
+    void verificationProgress(int step, int total);
     void instructionReceived(QString instruction);
     void verificationPhaseChanged(QString phase);
     void checkResult(bool passed, QString message);
@@ -42,12 +47,17 @@ signals:
     void recordingReady(int nextChunkIndex);
     void evidenceFinalized(const QString &status);
     void analysisStatusChanged(const QString &message);
+    void cameraAvailabilityChanged(bool available);
+    void microphoneAvailabilityChanged(bool available);
     void verificationError(const QString &message);
     void admissionReceived(const QString &token);
     void verificationAudioStatus(const QString &message);
 
 private:
     bool m_verifying = false;
+    bool m_pronunciationPlaying = false;
+    QString m_syllables;
+    PronunciationPlayer m_pronunciation;
     AudioCapture m_audio;
     MediaValidator m_media;
     MlApiClient    m_mlApi;

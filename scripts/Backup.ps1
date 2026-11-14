@@ -13,6 +13,8 @@ docker compose cp 'api:/app/ExamVideos' (Join-Path $target 'videos')
 if ($LASTEXITCODE -ne 0) { throw 'Video backup failed.' }
 docker compose cp 'api:/app/InferenceImages' (Join-Path $target 'images')
 if ($LASTEXITCODE -ne 0) { throw 'Image backup failed.' }
+docker compose cp 'api:/app/credential-keys' (Join-Path $target 'credential-keys')
+if ($LASTEXITCODE -ne 0) { throw 'Credential key backup failed. Password documents need both the database and these keys.' }
 $stateArchive = '/tmp/backup-' + [Guid]::NewGuid().ToString('N')
 $backupCode = 'import sqlite3,pathlib,sys; p=pathlib.Path(sys.argv[1]); p.mkdir(); files=list(pathlib.Path("/app/state").glob("*.sqlite3")); [(sqlite3.connect(str(f)).backup(sqlite3.connect(str(p/f.name)))) for f in files]'
 docker compose exec -T ai_service python -c $backupCode $stateArchive

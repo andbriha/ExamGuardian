@@ -7,6 +7,7 @@ export interface ViolationAlertDto {
   id: number;
   examSessionId: number;
   violationType: string;
+  priority?: 'Observation' | 'Warning' | 'Intervention';
   confidence: number;
   relativeTimestampSeconds: number;
   evidenceUrl?: string;
@@ -14,8 +15,9 @@ export interface ViolationAlertDto {
   timestamp: string;
   eventId: string;
   isReviewed: boolean;
-  reviewDecision: "Pending" | "Confirmed" | "Dismissed" | "LegacyReviewed";
+  reviewDecision: "Pending" | "Confirmed" | "Dismissed" | "NoViolation" | "InsufficientEvidence" | "LegacyReviewed";
   reviewNotes?: string;
+  reviewHistoryJson?: string;
   reviewedAt?: string;
 }
 
@@ -47,7 +49,7 @@ export class ViolationService {
     return this.http.get<ViolationAlertDto[]>(`${this.apiUrl}/by-session/${sessionId}`);
   }
 
-  markAsReviewed(id: number, decision: "Confirmed" | "Dismissed", notes: string): Observable<void> {
+  markAsReviewed(id: number, decision: "Confirmed" | "Dismissed" | "NoViolation" | "InsufficientEvidence", notes: string): Observable<void> {
     return this.http.patch<void>(`${this.apiUrl}/${id}/review`, { decision, notes });
   }
 

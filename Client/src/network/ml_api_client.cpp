@@ -28,6 +28,21 @@ void MlApiClient::cancelVerification() {
     m_verificationPending = false;
     m_verificationAudioPending = false;
     m_verificationFailures = 0;
+    m_verificationAudioBuffer.clear();
+    ++m_verificationAudioStep;
+}
+
+void MlApiClient::suspendVerificationAudio(bool suspended) {
+    m_verificationAudioSuspended = suspended;
+    m_verificationAudioBuffer.clear();
+    ++m_verificationAudioStep;
+}
+
+void MlApiClient::setVerificationTask(const QString &task) {
+    m_verificationAudioBuffer.clear();
+    ++m_verificationAudioStep;
+    emit verificationAudioStatus("Мікрофон готовий. Спочатку дочекайтеся підказки до завдання.");
+    emit challengeReceived(task);
 }
 
 void MlApiClient::fetchChallenge() {
@@ -39,7 +54,7 @@ void MlApiClient::fetchChallenge() {
         return;
     }
 #endif
-    QNetworkRequest request(QUrl(clientServerUrl() + QString("/verify/challenge?client_protocol=3&exam_id=%1").arg(m_examId)));
+    QNetworkRequest request(QUrl(clientServerUrl() + QString("/verify/challenge?client_protocol=4&exam_id=%1").arg(m_examId)));
 
     if (!m_authToken.isEmpty()) {
         request.setRawHeader("X-Session-Token", m_attemptToken.toUtf8());
@@ -54,8 +69,11 @@ void MlApiClient::fetchChallenge() {
             QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
             m_challengeId = doc.object()["challenge_id"].toString();
             QString task = doc.object()["task"].toString();
-            if (doc.object()["protocol_version"].toInt() != 3 || m_challengeId.isEmpty() || (!QStringList{"turn_left", "turn_right", "nod", "look_up", "smile", "open_mouth", "close_eyes"}.contains(task))) emit verificationError(QString("Версії перевірки не збігаються: клієнт 3, сервер %1 (%2). Перезапустіть AI-сервіс та оновіть клієнт.").arg(doc.object()["protocol_version"].toInt()).arg(clientServerUrl()));
-            else emit challengeReceived(task);
+            if (doc.object()["protocol_version"].toInt() != 4 || m_challengeId.isEmpty() || (!QStringList{"turn_left", "turn_right", "nod", "look_up", "smile", "open_mouth", "close_eyes"}.contains(task))) emit verificationError(QString("Версії перевірки не збігаються: клієнт 4, сервер %1 (%2). Перезапустіть AI-сервіс та оновіть клієнт.").arg(doc.object()["protocol_version"].toInt()).arg(clientServerUrl()));
+            else {
+                emit verificationProgress(doc.object()["step"].toInt(1), doc.object()["total_steps"].toInt(3));
+                setVerificationTask(task);
+            }
         } else {
             emit verificationError("Не вдалося отримати завдання. Перевірте з’єднання та спробуйте повторно.");
         }
@@ -137,13 +155,14 @@ void MlApiClient::sendVerificationFrame(const QImage &currentFrame, const QStrin
                     << "reason=" << obj["reason"].toString();
             if (obj["verified"].toBool()) emit admissionReceived(obj["admission_token"].toString());
             const QString nextTask = obj["next_task"].toString();
+            if (obj.contains("step")) emit verificationProgress(obj["step"].toInt(), obj["total_steps"].toInt(3));
             emit verificationFinished(
                 obj["verified"].toBool(),
                 obj["stage"].toString(),
                 obj["reason"].toString(),
                 obj["id_distance"].toDouble()
                 );
-            if (!nextTask.isEmpty()) emit challengeReceived(nextTask == "say_phrase" ? "say_phrase:" + obj["phrase"].toString() : nextTask);
+            if (!nextTask.isEmpty()) setVerificationTask(nextTask == "say_phrase" ? "say_phrase:" + obj["phrase"].toString() : nextTask);
         } else if ((reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 429 || reply->error() == QNetworkReply::TimeoutError || reply->error() == QNetworkReply::TemporaryNetworkFailureError) && ++m_verificationFailures <= 3) {
             emit verificationFinished(false, "liveness", "server_busy", 0);
         } else {
@@ -208,7 +227,20 @@ void MlApiClient::sendFrameForContinuousAnalysis(const QImage &image, int relati
 }
 
 void MlApiClient::sendAudioForAnalysis(const QByteArray &pcm, int relativeSeconds) {
-    if (m_sessionId <= 0 || m_audioPending || m_authToken.isEmpty()) return;
+    if (!m_continuousAudioActive || m_sessionId <= 0 || pcm.isEmpty() || m_authToken.isEmpty()) return;
+    // Retain at most ten seconds waiting for HTTP. Original timestamps expose
+    // any overflow/failure as a gap to the server; never splice unrelated PCM.
+    if (m_audioQueue.size() >= 2) m_audioQueue.dequeue();
+    m_audioQueue.enqueue(qMakePair(pcm, relativeSeconds));
+    flushContinuousAudio();
+}
+
+void MlApiClient::flushContinuousAudio() {
+    if (!m_continuousAudioActive || m_audioPending || m_audioQueue.isEmpty()) return;
+    const auto chunk=m_audioQueue.dequeue();
+    const auto &pcm=chunk.first;
+    const int relativeSeconds=chunk.second;
+    const auto epoch=m_audioEpoch;
     auto *parts=new QHttpMultiPart(QHttpMultiPart::FormDataType);
     QHttpPart audio; audio.setHeader(QNetworkRequest::ContentTypeHeader,"application/octet-stream");
     audio.setHeader(QNetworkRequest::ContentDispositionHeader,"form-data; name=\"file\"; filename=\"audio.pcm\""); audio.setBody(pcm); parts->append(audio);
@@ -217,44 +249,66 @@ void MlApiClient::sendAudioForAnalysis(const QByteArray &pcm, int relativeSecond
     req.setRawHeader("Authorization",("Bearer "+m_authToken).toUtf8());
     m_audioPending=true;
     auto *reply=m_manager->post(req,parts); parts->setParent(reply);
-    connect(reply,&QNetworkReply::finished,this,[this,reply] {
+    connect(reply,&QNetworkReply::finished,this,[this,reply,epoch] {
+        if (epoch!=m_audioEpoch) { reply->deleteLater(); return; }
         m_audioPending=false;
         if (reply->error()!=QNetworkReply::NoError) emit continuousAnalysisFinished(false,"Аудіоаналіз недоступний. Запис залишається матеріалом для перевірки.");
         reply->deleteLater();
+        flushContinuousAudio();
     });
 }
 
 void MlApiClient::sendVerificationAudio(const QByteArray &pcm) {
-    if (m_challengeId.isEmpty() || m_verificationAudioPending || pcm.isEmpty()) return;
+    if (m_verificationAudioSuspended || m_challengeId.isEmpty() || pcm.isEmpty()) return;
+    if (!m_verificationAudioBuffer.append(pcm)) emit verificationAudioStatus("Звук надходить швидше, ніж обробляється. Зробіть паузу й повторіть фразу.");
+    flushVerificationAudio();
+}
+
+void MlApiClient::flushVerificationAudio() {
+    if (m_verificationAudioSuspended || m_challengeId.isEmpty() || m_verificationAudioPending || m_verificationAudioBuffer.empty()) return;
+    const QByteArray pcm = m_verificationAudioBuffer.take();
+    const bool reset = m_verificationAudioBuffer.takeReset();
     const auto epoch = m_verificationEpoch;
+    const auto audioStep = m_verificationAudioStep;
     auto *parts = new QHttpMultiPart(QHttpMultiPart::FormDataType);
     QHttpPart audio;
     audio.setHeader(QNetworkRequest::ContentTypeHeader, "application/octet-stream");
     audio.setHeader(QNetworkRequest::ContentDispositionHeader, "form-data; name=\"file\"; filename=\"audio.pcm\"");
     audio.setBody(pcm); parts->append(audio);
     QUrl url(clientServerUrl() + "/verify/audio");
-    QUrlQuery query; query.addQueryItem("challenge_id", m_challengeId); url.setQuery(query);
+    QUrlQuery query; query.addQueryItem("challenge_id", m_challengeId);
+    if (reset) query.addQueryItem("reset_audio", "true");
+    url.setQuery(query);
     QNetworkRequest request(url);
     request.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     request.setTransferTimeout(15000);
     m_verificationAudioPending = true;
     auto *reply = m_manager->post(request, parts); parts->setParent(reply);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, epoch] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, epoch, audioStep] {
         if (epoch != m_verificationEpoch) { reply->deleteLater(); return; }
         m_verificationAudioPending = false;
+        if (audioStep != m_verificationAudioStep) { reply->deleteLater(); flushVerificationAudio(); return; }
         if (reply->error() == QNetworkReply::NoError) {
             const auto result = QJsonDocument::fromJson(reply->readAll()).object();
             if (result.contains("speech_ready")) {
                 if (!result["speech_ready"].toBool()) emit verificationAudioStatus("Спочатку дивіться прямо. Фразу скажіть після підказки.");
                 else if (result["phrase_matched"].toBool()) emit verificationAudioStatus("Фразу підтверджено. Дивіться прямо в камеру.");
-                else emit verificationAudioStatus("Розпізнано: «" + result["transcript"].toString() + "». Повторіть усю фразу після короткої паузи.");
+                else if (result["transcript"].toString().isEmpty()) emit verificationAudioStatus(
+                    result["speech_detected"].toBool() ? "Слухаємо… Договоріть усі склади та зробіть коротку паузу."
+                    : "Мовлення ще не чути. Скажіть показані склади звичайним голосом, близько до мікрофона.");
+                else emit verificationAudioStatus("Почули: «" + result["transcript"].toString() + "». Договоріть фразу. Якщо звуки розпізнано неправильно — повторіть після паузи.");
                 reply->deleteLater();
+                flushVerificationAudio();
                 return;
             }
             emit verificationAudioStatus(result["speech_detected"].toBool()
                 ? "Мікрофон: мовлення виявлено (зміст фрази не перевіряється)"
                 : "Мікрофон працює. Мовлення не виявлено.");
-        } else emit verificationAudioStatus("Аналіз мікрофона недоступний. Перевірте підключення.");
+        } else {
+            m_verificationAudioBuffer.clear();
+            emit verificationAudioStatus("Звук не доставлено. Дочекайтеся з’єднання та повторіть фразу; перевірку не зараховано.");
+        }
         reply->deleteLater();
+        flushVerificationAudio();
     });
 }

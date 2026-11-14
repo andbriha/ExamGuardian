@@ -49,7 +49,11 @@ Client/releases/
 backups/
 restored/
 Inference/state/
+Core/Core/state/
+output/
+tmp/
 Inference/models/vosk-model-*/
+Inference/models/phoneme-model/
 Inference/evaluation-results/
 *.obj
 *.o

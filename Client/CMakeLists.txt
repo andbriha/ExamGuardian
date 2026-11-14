@@ -58,6 +58,7 @@ qt_add_qml_module(appClient
         qml/screens/ExamScreen.qml
     SOURCES
         src/core/audio_capture.h
+        src/core/pronunciation_player.h
         src/core/media_validator.h
         src/core/media_validator.cpp
         src/system/input_blocker.h
@@ -91,6 +92,9 @@ target_include_directories(appClient PRIVATE
     src/viewmodels
 )
 
+qt_add_resources(appClient pronunciation PREFIX "/pronunciation" BASE "assets/pronunciation"
+    FILES assets/pronunciation/MA.wav assets/pronunciation/MI.wav assets/pronunciation/MU.wav)
+
 set_target_properties(appClient PROPERTIES
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
@@ -111,7 +115,15 @@ include(GNUInstallDirs)
 option(EXAMGUARDIAN_BUILD_TESTS "Build disk queue contract tests" OFF)
 if(EXAMGUARDIAN_BUILD_TESTS)
     enable_testing()
+    add_executable(pcm_resampler_test tests/pcm_resampler_test.cpp)
+    target_include_directories(pcm_resampler_test PRIVATE src/core)
+    add_test(NAME pcm_resampling COMMAND pcm_resampler_test)
     find_package(Qt6 REQUIRED COMPONENTS Test)
+    qt_add_executable(quiet_exam_test tests/quiet_exam_test.cpp)
+    target_compile_definitions(quiet_exam_test PRIVATE QUIET_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml/screens")
+    target_link_libraries(quiet_exam_test PRIVATE Qt6::Test Qt6::Quick)
+    add_test(NAME quiet_exam_screens COMMAND quiet_exam_test)
+    set_tests_properties(quiet_exam_screens PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     qt_add_executable(upload_queue_test tests/upload_queue_test.cpp src/network/core_api_client.cpp src/network/core_api_client.h)
     target_include_directories(upload_queue_test PRIVATE src/network)
     target_link_libraries(upload_queue_test PRIVATE Qt6::Test Qt6::Network Qt6::Multimedia)
@@ -120,7 +132,7 @@ if(EXAMGUARDIAN_BUILD_TESTS)
     target_include_directories(vm_policy_test PRIVATE src/system)
     target_link_libraries(vm_policy_test PRIVATE Qt6::Test)
     add_test(NAME vm_evidence_policy COMMAND vm_policy_test)
-    qt_add_executable(verification_capture_test tests/verification_capture_test.cpp src/core/media_validator.cpp src/core/media_validator.h)
+    qt_add_executable(verification_capture_test tests/verification_capture_test.cpp src/core/media_validator.cpp src/core/media_validator.h src/core/pronunciation_player.h)
     target_include_directories(verification_capture_test PRIVATE src/core)
     target_link_libraries(verification_capture_test PRIVATE Qt6::Test Qt6::Multimedia)
     add_test(NAME automatic_verification_capture COMMAND verification_capture_test)

@@ -1,0 +1,34 @@
+<main class="import-page">
+  <a routerLink="/students">← Студенти</a>
+  <h2>Додати студентів списком</h2>
+  <p class="lead">Одна група за раз: вставте список, перевірте рядки та створіть акаунти. Логіни й паролі можна сформувати автоматично.</p>
+  <div class="steps"><span>1 · Список</span><span>2 · Перевірка</span><span>3 · Акаунти та доступи</span></div>
+  @if (error) { <p class="error" role="alert">{{error}}</p> }
+  @if (result; as r) {
+    <section class="success"><h3>Група «{{r.group}}» готова</h3><p>Створено: {{r.created}} · Вже були в групі: {{r.skipped}}. Паролі наявних студентів не змінено.</p>
+      <app-group-credentials [group]="r.group" [members]="members" />
+      <a routerLink="/groups" [queryParams]="{group:r.group}">Перейти до групи</a>
+      <p>Наступний крок: додайте еталонні фото в профілях студентів перед перевіркою особи.</p>
+    </section>
+  } @else {
+    <section class="panel">
+      <label for="roster-group">Група (наявна або нова)</label>
+      <input id="roster-group" [(ngModel)]="group" (ngModelChange)="invalidate()" list="roster-groups" maxlength="100" [disabled]="busy" placeholder="Наприклад, КН-21">
+      <datalist id="roster-groups">@for(g of groups;track g){<option [value]="g"></option>}</datalist>
+      <div class="tools"><label class="file">Завантажити CSV / TSV / TXT <input type="file" accept=".csv,.tsv,.txt" (change)="file($event)" [disabled]="busy"></label><button (click)="template()" [disabled]="busy">Зразок CSV</button></div>
+      <label for="roster-text">Або вставте комірки з Excel / Google Sheets</label>
+      <p class="hint">ПІБ — обов'язково, логін — за бажанням. Можна вставити лише ПІБ, кожен з нового рядка. Для двох колонок: <code>full_name,username</code>. До 200 студентів.</p>
+      <textarea id="roster-text" [(ngModel)]="text" (ngModelChange)="invalidate()" [disabled]="busy" rows="9" placeholder="Марія Коваль&#10;Alex Smith"></textarea>
+      <button class="primary" (click)="check()" [disabled]="busy || !text.trim() || !group.trim()">{{busy ? 'Обробка…' : 'Перевірити список'}}</button>
+    </section>
+    @if(preview; as p) {
+      <section class="panel"><h3>Попередній перегляд · {{p.group}}</h3><p>Нових: {{creates}} · Пропустимо наявних: {{skips}}. Поки що нічого не збережено.</p>
+        <div class="table-scroll"><table><thead><tr><th>Рядок</th><th>ПІБ</th><th>Логін</th><th>Результат перевірки</th></tr></thead><tbody>
+          @for(row of p.rows;track row.row){<tr [class.invalid]="row.error"><td>{{row.row}}</td><td>{{row.fullName}}</td><td>{{row.login || 'Автоматично'}}</td><td>{{row.error || (row.action === 'skip' ? 'Вже у групі — без змін' : 'Створимо акаунт')}}</td></tr>}
+        </tbody></table></div>
+        @if(!p.token){<p class="error">Виправте позначені рядки у списку вище та перевірте його ще раз. Частковий імпорт не виконується.</p>}
+        <button class="primary" (click)="commit()" [disabled]="busy || !p.token">{{busy ? 'Створення акаунтів…' : 'Підтвердити список · ' + creates + ' нових'}}</button>
+      </section>
+    }
+  }
+</main>

@@ -41,6 +41,10 @@ class TokenContracts(unittest.TestCase):
 
 class OutboxContracts(unittest.TestCase):
     def setUp(self):
+        from pathlib import Path
+        from core import outbox
+        # Other suites may import outbox before this module sets its environment.
+        self.enterContext(patch.object(outbox, 'STATE_PATH', Path(os.environ['OBSERVATION_STATE_PATH'])))
         from core.outbox import connect
         with connect() as db:
             db.execute("DELETE FROM outbox")
@@ -71,9 +75,21 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
         sys.modules["api.deps"] = deps
         cls.routes = importlib.import_module("api.routes.verify_session")
 
+    async def test_legacy_clients_and_missing_model_receive_visual_tasks(self):
+        user = {"id": str(uuid4())}
+        with patch.object(self.routes, "get_phoneme_analyzer", return_value=types.SimpleNamespace(available=True)) as model:
+            for protocol in (2, 3):
+                issued = await self.routes.get_challenge(exam_id=9, user_info=user, client_protocol=protocol)
+                self.assertFalse(issued["speech_recognition"])
+            model.assert_not_called()
+        with patch.object(self.routes, "get_phoneme_analyzer", return_value=types.SimpleNamespace(available=False)):
+            issued = await self.routes.get_challenge(exam_id=9, user_info=user, client_protocol=4)
+            self.assertFalse(issued["speech_recognition"])
+            self.assertEqual(issued["total_steps"], 3)
+
     async def test_protocol_and_microphone_contract(self):
         user = {"id": str(uuid4())}
-        with patch.object(self.routes, "get_speech_analyzer", return_value=types.SimpleNamespace(available=False)):
+        with patch.object(self.routes, "get_phoneme_analyzer", return_value=types.SimpleNamespace(available=False)):
             capabilities = await self.routes.verification_capabilities()
         self.assertEqual(capabilities["protocol_version"], 2)
         self.assertFalse(capabilities["speech_recognition"])
@@ -200,8 +216,8 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
         user = {"id": str(uuid4())}
         Path(_temporary.name, user["id"] + ".jpg").write_bytes(b"reference")
         speech = types.SimpleNamespace(available=True, transcribe=lambda data: {"transcript": "не та фраза", "confidence": .99})
-        with patch.object(self.routes, "get_speech_analyzer", return_value=speech):
-            issued = await self.routes.get_challenge(exam_id=9, user_info=user, client_protocol=3)
+        with patch.object(self.routes, "get_phoneme_analyzer", return_value=speech):
+            issued = await self.routes.get_challenge(exam_id=9, user_info=user, client_protocol=4)
             with closing(sqlite3.connect(os.environ["VERIFICATION_STATE_PATH"])) as db, db:
                 # Isolate the final speech step; other tests exercise gesture transitions.
                 db.execute("UPDATE challenges SET task='say_phrase',sequence=?,step=0 WHERE id=?", (json.dumps(["say_phrase"]), issued["challenge_id"]))
@@ -228,9 +244,9 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
             for _ in range(3): await frame()
             self.assertFalse((await audio())["phrase_matched"])
             self.assertFalse((await frame())["verified"])
-            speech.transcribe = lambda data: {"transcript": phrase, "confidence": .4}
+            speech.transcribe = lambda data: {"phonemes": [{"phone": p, "confidence": .4} for s in phrase.split() for p in s.lower()]}
             self.assertFalse((await audio())["phrase_matched"])
-            speech.transcribe = lambda data: {"transcript": phrase, "confidence": .99}
+            speech.transcribe = lambda data: {"phonemes": [{"phone": p, "confidence": .99} for s in phrase.split() for p in s.lower()]}
             spoken = await audio()
             self.assertTrue(spoken["phrase_matched"])
             self.assertNotIn("admission_token", spoken)
@@ -307,6 +323,34 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException):
             await self.routes.verify_identity_and_liveness(issued["task"], issued["challenge_id"], Frame(), user, None, None, None)
 
+    async def test_expired_checkpoint_refresh_keeps_completed_movement(self):
+        import json
+        from pathlib import Path
+        user = {"id":str(uuid4())}
+        Path(_temporary.name,user["id"]+'.jpg').write_bytes(b'reference')
+        with patch.object(self.routes,'new_sequence',return_value=['turn_left']):
+            issued = await self.routes.get_challenge(exam_id=9,user_info=user)
+        baseline = dict(yaw=0.,gesture_pitch=0.,smile=0.,mouth=0.,eyes_closed=0.)
+        tick = time.time()
+        state = dict(live_until=tick-1,last_seen=tick,baseline=baseline,phase='return')
+        with closing(sqlite3.connect(os.environ['VERIFICATION_STATE_PATH'])) as db, db:
+            db.execute('UPDATE challenges SET motion=? WHERE id=?',(json.dumps(state),issued['challenge_id']))
+        class Frame:
+            async def read(self,limit): return str(uuid4()).encode()
+        class Pose:
+            def analyze_continuous(self,content): return dict(has_face=True,**baseline)
+        class Identity:
+            def compare(self,*args,check_spoof=True): return {'match':True}
+        with patch.object(self.routes.time,'time',return_value=tick):
+            result = await self.routes.verify_identity_and_liveness('turn_left',issued['challenge_id'],Frame(),user,Identity(),Pose(),None)
+        self.assertFalse(result['verified'])
+        with closing(sqlite3.connect(os.environ['VERIFICATION_STATE_PATH'])) as db:
+            saved = json.loads(db.execute('SELECT motion FROM challenges WHERE id=?',(issued['challenge_id'],)).fetchone()[0])
+        self.assertEqual(saved['phase'],'return'); self.assertIn('baseline',saved)
+        with patch.object(self.routes.time,'time',return_value=tick+.5):
+            result = await self.routes.verify_identity_and_liveness('turn_left',issued['challenge_id'],Frame(),user,Identity(),Pose(),None)
+        self.assertTrue(result['verified'])
+
     async def test_admission_requires_transition_and_is_consumed(self):
         from pathlib import Path
         user = {"id": str(uuid4()), "login": "test"}
@@ -314,7 +358,11 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
         with patch.object(self.routes, "new_sequence", return_value=["turn_left", "smile", "close_eyes"]):
             issued = await self.routes.get_challenge(exam_id=9,user_info=user)
         class Identity:
-            def compare(self, reference, current, check_spoof=True): return {"match": True,"distance": 0.2}
+            calls = 0
+            def compare(self, reference, current, check_spoof=True):
+                self.calls += 1
+                return {"match": True,"distance": 0.2}
+        identity = Identity()
         class Pose:
             values = dict(has_face=True, yaw=0., gesture_pitch=0., smile=0., mouth=0., eyes_closed=0.)
             def analyze_continuous(self, content): return self.values.copy()
@@ -330,7 +378,7 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
             tick += .5
             counter += 1
             with patch.object(self.routes.time, "time", return_value=tick):
-                return await self.routes.verify_identity_and_liveness(task,issued["challenge_id"],Frame(content or str(counter).encode()),user,Identity(),pose,None)
+                return await self.routes.verify_identity_and_liveness(task,issued["challenge_id"],Frame(content or str(counter).encode()),user,identity,pose,None)
         for current_task, feature, target in [("turn_left", "yaw", -.15), ("smile", "smile", .8), ("close_eyes", "eyes_closed", .9)]:
             task = current_task
             for _ in range(3):
@@ -348,6 +396,7 @@ class ChallengeContracts(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("next_task", result)
                 with self.assertRaises(HTTPException): await verify()
         self.assertTrue(result["verified"])
+        self.assertEqual(identity.calls, 4)  # one initial + one final checkpoint per action
         admission=jwt.decode(result["admission_token"],KEY,algorithms=["HS256"],issuer="ContractIssuer",audience="ExamGuardianAdmission")
         self.assertEqual(admission["exam_id"],"9")
         self.assertEqual(admission["sub"],user["id"])

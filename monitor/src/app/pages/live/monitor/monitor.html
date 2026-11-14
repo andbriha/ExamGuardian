@@ -1,7 +1,7 @@
 <div class="monitor-wrap">
   <div class="header">
     <div class="h-left">
-      <h2>🔴 Диспетчерська моніторингу: {{ exam?.title || ('Іспит #' + examId) }}</h2>
+      <h2>Моніторинг: {{ exam?.title || ('Іспит #' + examId) }}</h2>
       <div class="h-sub">Стан сесій, сигнали для перевірки та записані відеофрагменти. Оновлення кожні 8 секунд.</div>
     </div>
     <div class="stats">
@@ -16,7 +16,7 @@
       <h3>👥 Сесії учасників</h3>
       <div class="list">
         @for (s of students; track s.sessionId) {
-          <div class="student-card" 
+          <div class="student-card" role="button" tabindex="0" (keydown.enter)="selectSession(s)" (keydown.space)="$event.preventDefault(); selectSession(s)"
                [class.selected]="selectedSession?.sessionId === s.sessionId"
                (click)="selectSession(s)">
             <div class="s-top">
@@ -50,7 +50,7 @@
           </span>
         </div>
         <div *ngIf="selectedSession && sessionViolations.length > 0">
-          <a [routerLink]="['/violation', sessionViolations[0].id]" class="btn-inspect-link">
+          <a [routerLink]="['/violation', activeViolationMarker?.id || sessionViolations[0].id]" class="btn-inspect-link">
             🔍 Повний розбір ➔
           </a>
         </div>
@@ -68,7 +68,7 @@
             <button class="cs-btn" 
                     [class.active]="selectedChunkIndex === c.chunkIndex"
                     (click)="selectChunk(c.chunkIndex)">
-              Чанк #{{ c.chunkIndex }}
+              {{ c.metadata?.startOffsetSeconds != null ? formatTime(c.metadata!.startOffsetSeconds!) : 'Час невідомий' }}
             </button>
           }
         </div>
@@ -168,29 +168,37 @@
     <!-- 3. Right Panel: AI Feed -->
     <div class="panel alert-panel">
       <h3>Спостереження до перевірки</h3>
+      <p>Пріоритет означає потребу в увазі, а не доведене порушення. Студент цих сигналів не бачить.</p>
+      <label>Пошук<input [(ngModel)]="queueSearch" placeholder="Студент або спостереження"></label>
+      <label>Черга<select [(ngModel)]="queueFilter"><option value="new">Нові</option><option value="waiting">Очікують матеріалів</option><option value="all">Усі відкриті</option></select></label>
+      <p *ngIf="alertsError" role="alert">{{ alertsError }} <button (click)="refreshAlerts()" [disabled]="alertsLoading">Повторити</button></p>
+      <p *ngIf="alertsUpdatedAt">Оновлено: {{ alertsUpdatedAt | date:'HH:mm:ss' }}</p>
+      <p *ngIf="alertsLoading && !alertsUpdatedAt" role="status">Завантаження черги…</p>
       <div class="list">
-        @for (a of alerts; track a.id) {
-          <div class="alert-card" (click)="onAlertClicked(a)">
+        @for (a of visibleAlerts; track a.id) {
+          <div class="alert-card" [attr.data-priority]="observationPriority(a.raw)" (click)="onAlertClicked(a)">
+            <div class="priority-label">{{ priorityLabel(a.raw) }}</div>
             <div class="a-top">
               <span class="time">{{ a.time }} &bull; {{ formatTime(a.relativeSec) }}</span>
               <span class="conf">{{ confidenceLabel(a.raw) }}</span>
             </div>
-            <div class="a-title">{{ a.type }}</div>
+            <div class="a-title">{{ a.type }}</div><p>{{ decisionLabel(a.raw.reviewDecision) }}</p>
+            <p *ngIf="episodeLabel(a.raw)">{{ episodeLabel(a.raw) }}</p>
             @if (getViolationDetail(a.raw)) {
               <div style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">{{ getViolationDetail(a.raw) }}</div>
             }
             <div class="a-student">{{ a.studentName }}</div>
             <div class="a-actions">
-              <button class="btn-seek">▶ Дивитись у плеєрі</button>
+              <button class="btn-seek" (click)="$event.stopPropagation(); onAlertClicked(a)">▶ Дивитись у плеєрі</button>
               <a [routerLink]="['/violation', a.id]" class="btn-detail-link" (click)="$event.stopPropagation()">
                 Деталі ➔
               </a>
             </div>
           </div>
         }
-        @if (alerts.length === 0) {
+        @if (visibleAlerts.length === 0 && !alertsError && !alertsLoading) {
           <div style="padding: 32px; text-align: center; color: #64748b;">
-            Немає нових спостережень до перевірки. Стан аналізу та повнота записів показані для кожної спроби.
+            У вибраній черзі немає спостережень за цими умовами. Повноту записів перевіряйте окремо.
           </div>
         }
       </div>

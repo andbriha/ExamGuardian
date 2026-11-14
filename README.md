@@ -70,10 +70,11 @@ Install Qt 6.10.1 MinGW, matching compiler, CMake and Ninja. Build a fresh relea
 
 - `ExamGuardian_Setup_Dev.exe` / `ExamGuardian_Setup_Prod.exe`: complete installers.
 - `ExamGuardian_Client_Dev.zip` / `ExamGuardian_Client_Prod.zip`: portable clients including Qt libraries; extract the entire archive before running its EXE.
-- `ExamGuardian_Client_Dev.exe` / `ExamGuardian_Client_Prod.exe`: binary-only updates requiring the matching deployed libraries.
 - `release-manifest_Dev.json` / `release-manifest_Prod.json`: build identity and SHA-256 hashes.
 
 `Landing.dev` is no longer used. Both environments mount `Landing/`; Nginx selects the matching flavor for the common download URLs and sends the suffixed filename to the browser. Production refuses direct DEV downloads, and development refuses direct PROD downloads. Missing packages return 404. Each flavor is published independently. The login screen configures the server origin; `EXAMGUARDIAN_URL` overrides it.
+
+Portable downloads are always ZIP packages, never a bare Qt executable. Extract the entire ZIP and run `Online_Proctoring_System_Client.exe` beside its DLLs. Legacy client EXE download URLs redirect to the matching ZIP. Release builds verify the extracted ZIP with Qt and QML developer paths removed from the environment; `Client/test-portable.ps1 -ArchivePath <zip> -Flavor development` repeats this check independently.
 
 Windows and Linux builds, headless QML startup and persistent upload-queue tests pass. Windows Qt login/admission/autosave/submission was checked against the disposable Core API. Linux has `/proc`, DMI/CPUID checks and X11 controls; real device and desktop behavior still need practical testing. Wayland environment blocking is unsupported. Neither platform provides an absolute sandbox against an administrator or external hardware.
 
@@ -104,7 +105,7 @@ For the legacy installation, use a quiet checkpoint after active attempts and pe
 ./scripts/Restore-Checkpoint.ps1 -BackupDirectory ./backups/checkpoint-01 -Destination ./restored/checkpoint-01
 ```
 
-The backup includes PostgreSQL, camera/screen files, photos/evidence and online SQLite snapshots with checksums. Restore validates checksums and restores into a new isolated PostgreSQL container; it preserves the existing installation. Verify restored records/media before switching any deployment to it.
+The backup includes PostgreSQL, camera/screen files, photos/evidence, credential encryption keys and online SQLite snapshots with checksums. The API stores its key ring in the persistent `credential_keys` volume (`CredentialKeysPath`); back it up together with the database. Without these keys issued passwords cannot be recovered. Native runs use `Core/Core/state/credential-keys`; do not commit or publish this directory. Restore validates checksums and restores into a new isolated PostgreSQL container; it preserves the existing installation. Verify restored records/media before switching any deployment to it.
 
 Retention is disabled by default. The administrator must set `Retention__Days` (at least seven). Preview first with `dotnet Api.dll --retention-preview`; use `--retention-apply` only after reviewing the plan and preserving a backup. Commands run in the API storage environment with its database configuration. Only finished, already reviewed attempts older than the policy are eligible. Media expires; scores, answers, timing/hash sidecars and review history remain. Reference photographs have a separate enrollment lifecycle and are not removed by this command.
 
@@ -131,3 +132,17 @@ For labelled local samples, run `python evaluate.py dataset.jsonl --output evalu
 ### Linux launcher
 
 Use `bash run.sh --check`, then `bash run.sh` with Docker Compose v2, Bash and Python 3.9+. Production: configure `.env.production` and TLS, then `bash run.sh --production --check` and `bash run.sh --production`. `--status` and `--stop` target the selected environment. See the documentation `/start` page for prerequisites and the separate Linux Qt client boundary.
+
+### Доступи та групові відомості
+
+У **Студентах → Додати списком** виберіть групу та вставте список з Excel/Google Sheets або завантажте CSV UTF-8, TSV чи TXT (до 200 студентів і 200 КБ). Потрібен ПІБ, логін необов’язковий. Шаблон і попередній перегляд доступні на сторінці. Помилки блокують увесь імпорт; наявні студенти з тими самими даними пропускаються без зміни паролів. Для тезок задайте різні логіни.
+
+У **Академічних групах → Доступи студентів** можна повторно завантажити PDF логінів і виданих системою паролів без їх зміни, або CSV тільки логінів. Паролі нових імпортованих акаунтів зберігаються зашифровано окремо від BCrypt-хешів. Старі акаунти та самостійно змінені паролі позначаються «Не збережено». **Випустити паролі** після явного підтвердження замінює паролі всієї групи й формує PDF. Активні спроби або змінений склад групи блокують перевипуск. Передавайте кожному студенту тільки його рядок. Refresh-токени скидаються при перевипуску; вже видані access-токени діють до закінчення строку.
+
+У відомості обраної групи та іспиту **Результати для студентів → Підготувати груповий PDF** показує попередній перегляд, після чого можна скачати PDF. Він містить усіх поточних студентів групи, підтверджені оцінки, суму балів і розподіл за категоріями завдань. Для непідтверджених результатів показується статус без оцінки. Береться остання спроба, без підміни старішою. Питання, відповіді, паролі й матеріали спостереження до цього документа не потрапляють. Це окрема від Moodle CSV відомість для учнів.
+
+Категорія звіту задається для кожного питання в конструкторі. Бали підсумовуються з результатів питань, зафіксованих у спробі; подальша зміна іспиту їх не змінює. Назва «Аудіювання» чи «Відповідність» сама по собі не додає нового типу питання: ці взаємодії поки не реалізовані. Для старих спроб категорія за замовчуванням — «Тестові завдання»; за відсутності знімка деталізація недоступна.
+
+В **Архіві та звітах** спочатку оберіть групу, потім іспит (назва, ID і дата). Відомість показує поточний склад групи, включно зі студентами без спроб, останню спробу кожного студента, академічний бал і окремий висновок викладача. Повторні спроби доступні в історії рядка. Пошук і фільтр очікування рішення змінюють лише вигляд таблиці; CSV відомості завжди містить усю групу. Це робоча відомість, яка включає непідтверджені та DEV-результати; Moodle CSV нижче містить лише результати, що відповідають правилам експорту. Переведення студента до іншої групи змінює його розміщення у відомостях: історичний склад групи поки не фіксується.
+
+У формі рішення недоступні висновки заблоковані з поясненням. DEV-спробу з пропущеною перевіркою особи можна оформити як «Недостатньо доказів», але не підтвердити для експорту. Після рішення відомість і доступність Moodle-експорту оновлюються.

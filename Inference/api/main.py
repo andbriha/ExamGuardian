@@ -11,7 +11,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from api.routes import frame, audio, verify_session
 from api.deps   import (get_liveness_analyzer, get_identity_analyzer,
-                         get_object_detector, get_audio_analyzer)
+                         get_object_detector, get_audio_analyzer, capacity_status)
+from models.phoneme_analyzer import get_phoneme_analyzer
+from fastapi.concurrency import run_in_threadpool
 
 logging.basicConfig(level=logging.INFO)
 
@@ -23,6 +25,9 @@ async def lifespan(app: FastAPI):
     get_identity_analyzer()
     detector = get_object_detector()
     get_audio_analyzer()
+    # Load the optional large model before readiness, not on the first student's
+    # challenge. Failure retains the existing explicit visual-task fallback.
+    app.state.phoneme_available = (await run_in_threadpool(get_phoneme_analyzer)).available
     warmup = cv2.imencode(".jpg",np.full((480,640,3),127,dtype=np.uint8))[1].tobytes()
     for _ in range(3):
         liveness.analyze_continuous(warmup)
@@ -54,4 +59,6 @@ async def root():
 @app.get("/health/ready")
 async def ready():
     delivery = status()
-    return {"ready": True, "delivery": delivery, "degraded": delivery["failed"]>0, "models": app.state.model_hashes}
+    return {"ready": True, "delivery": delivery, "degraded": delivery["failed"]>0,
+            "models": app.state.model_hashes, "speech_recognition": app.state.phoneme_available,
+            "capacity": capacity_status()}

@@ -1,10 +1,43 @@
 #include <QtTest>
 #include <QVideoFrame>
 #include "media_validator.h"
+#include "pronunciation_player.h"
+#include "../src/network/verification_audio_buffer.h"
 
 class VerificationCaptureTest : public QObject {
     Q_OBJECT
 private slots:
+    void pronunciationSuspendsBeforePlaybackAndCancellationCannotResumeIt() {
+        PronunciationPlayer player;
+        QSignalSpy changes(&player, &PronunciationPlayer::activeChanged);
+        player.play("../../wrong");
+        QCOMPARE(changes.count(), 0);
+        player.play("MA MI MU");
+        QCOMPARE(changes.count(), 1);
+        QCOMPARE(changes.first().at(0).toBool(), true);
+        player.stop();
+        QCOMPARE(changes.count(), 2);
+        QCOMPARE(changes.last().at(0).toBool(), false);
+        QTest::qWait(700);
+        QCOMPARE(changes.count(), 2);
+    }
+    void audioKeepsOrderAcrossSlowRequestsAndResetsAfterOverflow() {
+        VerificationAudioBuffer buffer;
+        QVERIFY(buffer.append(QByteArray(32000, 'a')));
+        QVERIFY(buffer.append(QByteArray(32000, 'b')));
+        QVERIFY(buffer.append(QByteArray(32000, 'c')));
+        QVERIFY(buffer.takeReset());
+        QCOMPARE(buffer.take(), QByteArray(32000,'a') + QByteArray(32000,'b'));
+        QCOMPARE(buffer.take(), QByteArray(32000,'c'));
+        QVERIFY(buffer.empty());
+        QVERIFY(!buffer.takeReset());
+        QVERIFY(buffer.append(QByteArray(320000,'d')));
+        QVERIFY(!buffer.append(QByteArray(32000,'e')));
+        QVERIFY(buffer.takeReset());
+        QCOMPARE(buffer.take(),QByteArray(32000,'e'));
+        buffer.append(QByteArray(32000,'x')); buffer.clear();
+        QVERIFY(buffer.empty()); QVERIFY(buffer.takeReset());
+    }
     void phasesDoNotCreateExtraActions() {
         MediaValidator validator;
         QSignalSpy tasks(&validator,&MediaValidator::instructionReceived);
@@ -22,8 +55,8 @@ private slots:
         MediaValidator validator;
         QSignalSpy tasks(&validator,&MediaValidator::instructionReceived);
         QSignalSpy phases(&validator,&MediaValidator::verificationPhaseChanged);
-        validator.onChallengeReceived(QString::fromUtf8("say_phrase:сонце книга вода"));
-        QVERIFY(tasks.last().at(0).toString().contains(QString::fromUtf8("сонце книга вода")));
+        validator.onChallengeReceived(QString::fromUtf8("say_phrase:MA MI MU"));
+        QVERIFY(tasks.last().at(0).toString().contains(QString::fromUtf8("MA MI MU")));
         validator.onVerificationFinished(false,"liveness","say_phrase",.2);
         QCOMPARE(phases.last().at(0).toString(),QString("perform"));
         const auto count = phases.count();

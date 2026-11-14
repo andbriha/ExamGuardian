@@ -9,6 +9,7 @@ public class QuestionConfiguration : IEntityTypeConfiguration<Question>
     public void Configure(EntityTypeBuilder<Question> builder)
     {
         builder.HasKey(q => q.Id);
+        builder.Property(q => q.ReportCategory).HasMaxLength(80).HasDefaultValue("Тестові завдання");
 
         // Текст питання може бути довгим, виділяємо достатньо місця
         builder.Property(q => q.Text).IsRequired().HasMaxLength(1500);

@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BusinessLogicLayer.Services;
 
-public record SessionQuestion(int Id, int Points, int CorrectIndex, int OptionCount, string? Text = null, string[]? Options = null);
+public record SessionQuestion(int Id, int Points, int CorrectIndex, int OptionCount, string? Text = null, string[]? Options = null, string ReportCategory = "Тестові завдання");
 
 public class ExamSessionService(AppDbContext db) : IExamSessionService
 {
@@ -66,7 +66,7 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
     }
 
     private static string CreateSnapshot(Exam exam) => JsonSerializer.Serialize(new { exam.Title, exam.Description, exam.DurationMinutes, exam.PassingScore, exam.AllowSpeech, exam.FlagHeadMovement, AllowedObjects = JsonSerializer.Deserialize<List<string>>(exam.AllowedObjectsJson),
-        Questions = exam.Questions.OrderBy(q => q.OrderIndex).Select(q => new SessionQuestion(q.Id,q.Points,q.CorrectIndex,q.Options.Count,q.Text,q.Options.OrderBy(o => o.OrderIndex).Select(o => o.Text).ToArray())) });
+        Questions = exam.Questions.OrderBy(q => q.OrderIndex).Select(q => new SessionQuestion(q.Id,q.Points,q.CorrectIndex,q.Options.Count,q.Text,q.Options.OrderBy(o => o.OrderIndex).Select(o => o.Text).ToArray(),q.ReportCategory)) });
     private static List<SessionQuestion> Questions(ExamSession s) {
         using var doc = JsonDocument.Parse(s.ExamSnapshotJson ?? "[]");
         var root = doc.RootElement;
@@ -79,7 +79,7 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
         using var doc = JsonDocument.Parse(session.ExamSnapshotJson ?? "[]");
         return new ExamDto { Id = examId, Title = doc.RootElement.ValueKind == JsonValueKind.Object ? doc.RootElement.GetProperty("Title").GetString()! : session.Exam.Title,
             DurationMinutes = session.Exam.DurationMinutes, PassingScore = session.Exam.PassingScore,
-            Questions = snapshot.Select((q,index) => new QuestionDto {Id=q.Id,Text=q.Text ?? "Legacy question",Points=q.Points,OrderIndex=index,
+            Questions = snapshot.Select((q,index) => new QuestionDto {Id=q.Id,Text=q.Text ?? "Legacy question",Points=q.Points,ReportCategory=q.ReportCategory,OrderIndex=index,
                 Options=(q.Options ?? Array.Empty<string>()).Select((text,i) => new QuestionOptionDto{Text=text,OrderIndex=i}).ToList()}).ToList() };
     }
     private static void ValidateAnswers(List<SessionQuestion> questions, Dictionary<int,int> answers)
@@ -128,7 +128,9 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
         if (questions.Count == 0) throw new InvalidOperationException("This legacy attempt has no grading snapshot. Reopen it before submission.");
         ValidateAnswers(questions, answers);
         var total = questions.Sum(q => q.Points);
-        s.Score = total == 0 ? 0 : Math.Round(100.0 * questions.Where(q => answers.TryGetValue(q.Id, out var selected) && selected == q.CorrectIndex).Sum(q => q.Points) / total);
+        var marks = questions.ToDictionary(q => q.Id, q => answers.TryGetValue(q.Id, out var selected) && selected == q.CorrectIndex ? q.Points : 0);
+        s.QuestionScoresJson = JsonSerializer.Serialize(marks);
+        s.Score = total == 0 ? 0 : Math.Round(100.0 * marks.Values.Sum() / total);
         s.SavedAnswersJson = JsonSerializer.Serialize(answers);
         s.SubmissionId = dto.SubmissionId == Guid.Empty ? Guid.NewGuid() : dto.SubmissionId;
         s.EndTime = timedOut ? deadline : DateTime.UtcNow;
@@ -164,7 +166,7 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
         var s = await Details.FirstOrDefaultAsync(s => s.Id == sessionId) ?? throw new KeyNotFoundException("Session not found.");
         if (!s.IsFinished) throw new InvalidOperationException("Finish the attempt before reviewing it.");
         if (verdict == "Accepted" && s.AdmissionId?.StartsWith("dev_") == true) throw new InvalidOperationException("DEV attempt: identity verification was skipped. This result cannot be accepted.");
-        if (verdict == "Accepted" && s.Violations.Any(v => v.ReviewDecision != "Dismissed")) throw new InvalidOperationException("Dismiss every observation before accepting the attempt.");
+        if (verdict == "Accepted" && s.Violations.Any(v => !ObservationPolicy.IsCleared(v.ReviewDecision))) throw new InvalidOperationException("Resolve every observation as a detection error or no violation before accepting the attempt.");
         if (verdict == "Accepted" && s.EvidenceStatus != "Delivered") throw new InvalidOperationException("Complete evidence is required for acceptance. Use Inconclusive for missing recordings.");
         if (verdict == "Rejected" && !s.Violations.Any(v => v.ReviewDecision == "Confirmed")) throw new InvalidOperationException("Rejection requires a confirmed observation. Use Inconclusive for insufficient evidence.");
         var now = DateTime.UtcNow;
@@ -179,7 +181,7 @@ public class ExamSessionService(AppDbContext db) : IExamSessionService
         IdentityVerificationSkipped = s.AdmissionId?.StartsWith("dev_") == true,
         Id = s.Id, ActiveClientId = s.ActiveClientId, EvidenceClientId = s.EvidenceClientId, StudentId = s.StudentId, StudentName = s.Student?.FullName ?? "", ExamId = s.ExamId, ExamTitle = s.Exam?.Title ?? "",
         StartTime = s.StartTime, EndTime = s.EndTime, Score = s.Score, ScoreCalculated = s.IsFinished && (s.Status is "Completed" or "TimedOut"), PassingScoreAtStart = s.PassingScoreAtStart, IsFinished = s.IsFinished, ViolationCount = s.Violations.Count,
-        PendingObservationCount = s.Violations.Count(v => v.ReviewDecision is "Pending" or "LegacyReviewed"), ConfirmedObservationCount = s.Violations.Count(v => v.ReviewDecision == "Confirmed"),
+        PendingObservationCount = s.Violations.Count(v => v.ReviewDecision is "Pending" or "LegacyReviewed" or "InsufficientEvidence"), ConfirmedObservationCount = s.Violations.Count(v => v.ReviewDecision == "Confirmed"),
         DeadlineUtc = s.DeadlineUtc ?? s.StartTime.AddMinutes(s.Exam?.DurationMinutes ?? 0), ServerTimeUtc = DateTime.UtcNow,
         LastSeenAt = s.LastSeenAt, LastAnalysisAt = s.LastAnalysisAt, LastAudioAt = s.LastAudioAt, Status = s.IsFinished && s.Status == "InProgress" ? "Completed" : s.Status,
         IntegrityHistoryJson = s.IntegrityHistoryJson, IntegrityVerdict = s.IntegrityVerdict, IntegrityReviewedBy = s.IntegrityReviewedBy, IntegrityReviewedAt = s.IntegrityReviewedAt, IntegrityNotes = s.IntegrityVerdict == "UnderReview" ? null : s.IntegrityNotes,

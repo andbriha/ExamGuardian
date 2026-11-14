@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace Core;
 
@@ -27,10 +28,19 @@ public class Program
         if (string.IsNullOrWhiteSpace(builder.Configuration["AiService:ApiKey"])) throw new InvalidOperationException("Configure AiService__ApiKey.");
 
         builder.Services.AddControllers();
+        var keysPath = builder.Configuration["CredentialKeysPath"] ?? Path.Combine(builder.Environment.ContentRootPath, "state", "credential-keys");
+        Directory.CreateDirectory(keysPath);
+        builder.Services.AddDataProtection().SetApplicationName("ExamGuardian").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+        builder.Services.AddSingleton<Core.Security.IssuedCredentials>();
+        builder.Services.AddScoped<Core.Importing.Students.RosterImportService>();
+        builder.Services.AddScoped<Core.Exports.GroupResultsService>();
+        builder.Services.AddSingleton<Core.Documents.GroupPdfWriter>();
+        PdfSharp.Fonts.GlobalFontSettings.FontResolver = new Core.Documents.DocumentFonts();
 #if EXAMGUARDIAN_DEVELOPMENT
         builder.Services.AddSingleton<Core.Development.DevelopmentAdmission>();
 #endif
         builder.Services.AddScoped<Core.Exports.GradeExportService>();
+        builder.Services.AddScoped<Core.Exports.GroupCredentialsService>();
         builder.Services.AddTransient<Core.Importing.Qti.IQtiItemParser, Core.Importing.Qti.ChoiceItemParser>();
         builder.Services.AddTransient<Core.Importing.Qti.QtiPackageReader>();
 

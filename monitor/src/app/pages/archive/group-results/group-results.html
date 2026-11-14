@@ -1,0 +1,27 @@
+<section class="sheet">
+  <h3 id="group-results-heading">Відомість групи</h3>
+  <p>Усі студенти в одній таблиці. Бал показано за останньою спробою; висновок викладача — окремо.</p>
+  <p class="muted">Склад групи відповідає поточному списку студентів.</p>
+  @if (loading) { <p role="status">Завантаження груп…</p> }
+  @if (error) { <p role="alert">{{ error }} <button (click)="load()">Повторити</button></p> }
+  <div class="filters">
+    <label>Група<select [(ngModel)]="group" (ngModelChange)="selectGroup()"><option [ngValue]="null">Оберіть групу</option>@for (g of groups; track g) { <option [ngValue]="g">{{ g || 'Без групи' }}</option> }</select></label>
+    <label>Іспит<select [(ngModel)]="examId" [disabled]="group === null"><option [ngValue]="0">Оберіть іспит</option>@for (exam of availableExams; track exam.id) { <option [ngValue]="exam.id">{{ exam.title }} · #{{ exam.id }} · {{ exam.scheduledStartTime | date:'dd.MM.yyyy HH:mm' }}</option> }</select></label>
+  </div>
+  @if (group !== null && !availableExams.length) { <p>Для цієї групи ще немає іспитів.</p> }
+  @if (examId) {
+    <app-group-report-download [group]="group || ''" [examId]="examId" />
+    <div class="summary"><span>Студентів: <b>{{ rows.length }}</b></span><span>Завершили: <b>{{ finished }}</b></span><span>Прийнято: <b>{{ accepted }}</b></span><button (click)="download()" [disabled]="busy || !rows.length">Завантажити відомість CSV</button></div>
+    <p class="muted">Відомість містить усі результати, зокрема непідтверджені та DEV. Для Moodle використовуйте окремий експорт перевірених оцінок нижче.</p>
+    <div class="filters"><label>Пошук студента<input [(ngModel)]="search" placeholder="Ім’я або логін"></label><label class="check"><input type="checkbox" [(ngModel)]="pendingOnly">Лише очікують рішення</label></div>
+    <div class="table-wrap"><table><caption>Останні спроби студентів · {{ group || 'Без групи' }}</caption><thead><tr><th>Студент</th><th>Бал</th><th>Висновок</th><th>Матеріали та рішення</th></tr></thead><tbody>
+      @for (row of visibleRows; track row.student.id) {
+        <tr><td><strong>{{ row.student.fullName }}</strong><small>{{ row.student.login }}</small></td><td class="score">{{ score(row.latest) }}</td><td><span [class.accepted]="row.latest?.integrityVerdict === 'Accepted'">{{ verdict(row.latest) }}</span>@if (row.latest) {<small>Спроба #{{ row.latest.id }} · {{ row.latest.startTime | date:'dd.MM HH:mm' }}</small>}</td>
+        <td>@if (row.latest; as s) {<a [routerLink]="['/monitor', s.examId]" [queryParams]="{session:s.id}">Матеріали</a><button (click)="review.emit(s.id.toString())" [disabled]="busy || !s.isFinished">Перевірити</button>
+          @if (row.attempts.length > 1) { <details><summary>Усі спроби ({{ row.attempts.length }})</summary>@for (attempt of row.attempts; track attempt.id) { <p>#{{ attempt.id }} · {{ score(attempt) }} · {{ verdict(attempt) }} <a [routerLink]="['/monitor', attempt.examId]" [queryParams]="{session:attempt.id}">Матеріали</a></p> }</details> }
+          @if (s.isFinished) { <button (click)="report.emit(s.id.toString())">Протокол</button> }
+        } @else { <span class="muted">Спроби ще немає</span> }</td></tr>
+      } @empty { <tr><td colspan="4">Немає студентів за вибраними умовами.</td></tr> }
+    </tbody></table></div>
+  } @else { <p class="empty">Оберіть групу та іспит, щоб переглянути оцінки всіх студентів.</p> }
+</section>
