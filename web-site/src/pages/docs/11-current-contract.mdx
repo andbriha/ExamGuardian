@@ -50,7 +50,7 @@ Security changes, verification results and upgrade requirements are documented i
 
 ## Development and production implementation checkpoint
 
-The isolated Compose environments and launcher are implemented. `./run.ps1` selects development; `--production` or the Cyrillic alias selects production, requiring an independent `.env.production` and actual HTTPS configuration. `--check`, `--status` and `--stop` operate on the selected project. Stopping development preserves its volumes and the existing legacy stack.
+The isolated Compose environments and launcher are implemented. `./run.ps1` selects development; `--production` or `--prod` selects production, requiring an independent `.env.production` and actual HTTPS configuration. `--check`, `--status` and `--stop` operate on the selected project. Stopping development preserves its volumes and the existing legacy stack.
 
 Development runs Core watch, AI reload, Angular live updates and an Astro container. Qt is native. On this workstation the application origin is `http://127.0.0.1:8081`; the documentation container uses port 4323 because 4321/4322 already host existing documentation servers. Newly initialized installations select an available docs port and store it in `.env.dev`.
 

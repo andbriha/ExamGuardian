@@ -12,7 +12,7 @@ For examiners and organizers. This guide follows one exam from participant prepa
 ## 1. Prepare participants
 
 1. Open `/login` on the **application origin**, and sign in as an examiner.
-2. Open **Students → Додати списком**. Select an existing group or enter a new one, paste cells from Excel/Google Sheets or upload CSV UTF-8, TSV or TXT. Review every row before confirming. Individual account creation remains available; the group page also moves existing students when no attempt is active.
+2. Open **Students → Add from list**. Select an existing group or enter a new one, paste cells from Excel/Google Sheets or upload CSV UTF-8, TSV or TXT. Review every row before confirming. Individual account creation remains available; the group page also moves existing students when no attempt is active.
 3. Enroll a JPEG reference photograph for each student. Identity checks compare the student against this enrolled reference.
 4. Provide students with their credentials, the correct server origin, and the matching client installer from `/landing/` on that origin.
 
@@ -103,7 +103,7 @@ QTI 1.2/3.0, multiple-response questions, partial credit, custom scoring, adapti
 |---|---|
 | QTI versions | 2.1 and 2.2; 1.2 and 3.0 rejected |
 | Single answer | Textual choiceInteraction, maxChoices=1, 2–10 options |
-| True / false | Two-choice QTI items using identifiers; builder also has **Правда / Неправда** |
+| True / false | Two-choice QTI items using identifiers; builder also has **True / False** |
 | Scoring | Standard match_correct, 1 imported point; exam builder can change points |
 | Partial credit / multiple answers | Unsupported |
 | Free text, matching, ordering | Unsupported |
@@ -119,20 +119,20 @@ Implementation is separated into a package reader, an `IQtiItemParser` interface
 
 ## 8. Import a class and download its access sheet
 
-Use **Students → Додати списком**, or the same action inside a selected group. The downloadable template has columns `full_name,username`; only the full name is required. A plain list of names, one per line, also works. Paste spreadsheet cells directly or export Excel as **CSV UTF-8**; XLSX files are not read directly. The limit is 200 students / 200 KB per import.
+Use **Students → Add from list**, or the same action inside a selected group. The downloadable template has columns `full_name,username`; only the full name is required. A plain list of names, one per line, also works. Paste spreadsheet cells directly or export Excel as **CSV UTF-8**; XLSX files are not read directly. The limit is 200 students / 200 KB per import.
 
 The preview shows the resulting login, whether the account will be created or skipped, and row errors. Missing logins are generated automatically. Existing students with matching names and logins in the same group are skipped, preserving their passwords. Duplicates and conflicting accounts block confirmation; for students sharing a name, supply distinct logins. Fix the source and preview again. The preview expires after 15 minutes. Retrying confirmation after a lost connection does not duplicate accounts.
 
-After import, download **Доступи групи PDF** immediately or later from **Academic groups → Доступи студентів**. This teacher copy contains names, logins and recoverable institution-issued passwords. Downloading it never changes passwords. Give each student only their own row, together with the server address and installer. Reference photographs still require separate enrollment.
+After import, download **Group credentials PDF** immediately or later from **Academic groups → Student credentials**. This teacher copy contains names, logins and recoverable institution-issued passwords. Downloading it never changes passwords. Give each student only their own row, together with the server address and installer. Reference photographs still require separate enrollment.
 
-Older accounts and passwords changed independently appear as **Не збережено**. If needed, **Випустити паролі** explicitly replaces passwords for the whole selected group after confirmation. Active exam attempts or membership changes block this action. CSV login-only export remains available.
+Older accounts and passwords changed independently appear as **Not saved**. If needed, **Issue passwords** explicitly replaces passwords for the whole selected group after confirmation. Active exam attempts or membership changes block this action. CSV login-only export remains available.
 
 ## 9. Share a group results PDF
 
-In **Archive & Reports**, select a group and an exam, then choose **Результати для студентів → Підготувати груповий PDF**. Inspect the preview before downloading. The document includes the whole current group even if the working table is filtered. Each row shows the total earned/maximum points, grade out of 100, status and earned/maximum points for each task category.
+In **Archive & Reports**, select a group and an exam, then choose **Student results → Prepare group PDF**. Inspect the preview before downloading. The document includes the whole current group even if the working table is filtered. Each row shows the total earned/maximum points, grade out of 100, status and earned/maximum points for each task category.
 
 Only confirmed, finished, non-DEV results publish grades. Other students retain a status without a grade; a newer unconfirmed attempt hides an older confirmed grade. At least one confirmed grade is required by the download UI. This document contains no passwords, questions, answers or observation evidence. It is a group handout, separate from the Moodle import CSV and not a digitally signed certificate. Regenerate it after changes to review decisions.
 
-Set each question’s **report category** in the exam builder. Categories group raw awarded points, not percentages: two questions worth 2 and 3 points in the same category produce a maximum of 5. The attempt preserves its question categories and marks, so later exam edits do not rewrite results. Future question graders can supply awarded marks without changes to the PDF layout. Listening and matching interactions are not implemented yet; naming a category does not enable them. Legacy snapshots without category labels use **Тестові завдання**; missing snapshots cannot provide a breakdown.
+Set each question’s **report category** in the exam builder. Categories group raw awarded points, not percentages: two questions worth 2 and 3 points in the same category produce a maximum of 5. The attempt preserves its question categories and marks, so later exam edits do not rewrite results. Future question graders can supply awarded marks without changes to the PDF layout. Listening and matching interactions are not implemented yet; naming a category does not enable them. Legacy snapshots without category labels use **Test questions**; missing snapshots cannot provide a breakdown.
 
 The workflow follows the preview-before-import pattern documented in [Moodle bulk user upload](https://docs.moodle.org/501/en/upload_users). Self-enrollment through links or codes, as in [Google Classroom](https://support.google.com/edu/classroom/answer/6020282?hl=en), is useful for existing accounts; importing a roster better fits this system’s pre-issued exam accounts.

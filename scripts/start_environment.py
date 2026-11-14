@@ -67,7 +67,7 @@ def validate(settings, flavor):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Start ExamGuardian with Docker Compose (Python 3.9+, Docker Compose v2).')
-    parser.add_argument('--production', '--продакшн', action='store_true')
+    parser.add_argument('--production', '--prod', action='store_true')
     actions = parser.add_mutually_exclusive_group()
     for action in ('check', 'stop', 'status'):
         actions.add_argument('--' + action, action='store_true')
