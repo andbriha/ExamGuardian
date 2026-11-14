@@ -2,7 +2,7 @@
 
 Self-hosted exam attempts with identity checks, saved answers, camera/screen evidence and human review. The academic score is calculated from answers; the integrity verdict is a separate examiner decision.
 
-This is a pilot implementation. Model accuracy, resistance to recorded-video attacks, device compatibility and classroom-scale capacity require measured validation. See [PROJECT_ANALYSIS.md](PROJECT_ANALYSIS.md) for the original audit and [WORK_PROGRESS.md](WORK_PROGRESS.md) for implemented fixes and verification.
+This is a pilot implementation. Model accuracy, resistance to recorded-video attacks, device compatibility and classroom-scale capacity require measured validation.
 
 ## Components and authority
 
