@@ -1,45 +1,45 @@
-# Безопасность и архитектура: выполненные изменения
+# Security and architecture: completed changes
 
-Предыдущий этап (ИИ, спокойный интерфейс студента, решения преподавателя) отправлен в `origin/feature/active-liveness`, коммит `344b67e`; исправления чистого CI отправлены коммитом `2294415` (оба workflow push/PR успешны). Этот этап находится в `feature/security-architecture-hardening`. Изменения не развёрнуты на действующем сервере.
+The previous phase (AI, a calm student interface, teacher decisions) was pushed to `origin/feature/active-liveness`, commit `344b67e`; CI fixes were pushed in commit `2294415` (both push/PR workflows succeeded). This phase is on `feature/security-architecture-hardening`. The changes have not been deployed to the live server.
 
-## Что изменено
+## What changed
 
-- Core выдаёт короткие access JWT (по умолчанию 15 минут) с RS256. Inference получает только публичные ключи через фиксированный JWKS URL. Ключи допуска, попытки и медиассылки разделены по назначению; общий HMAC access JWT больше не принимается.
-- Сессии входа хранятся в PostgreSQL. Refresh-токены хранятся как хеши, обновляются атомарно; повторное использование отзывает семейство. Выход и изменение пароля отзывают доступ. Inference проверяет актуальность сессии у Core.
-- В браузере access JWT находится в памяти, refresh — в HttpOnly/SameSite cookie. Добавлены проверки Origin и ограничения частоты входа. Старые токены из localStorage удаляются.
-- Преподаватель получает доступ к студентам, фотографиям и выгрузке учётных данных только назначенных групп. Bootstrap-преподаватель становится администратором; администратор управляет назначениями через страницу групп. Создание экзамена проверяет право на группу.
-- Решения по наблюдению и итоговой добросовестности используют версию просмотренных материалов. Устаревшее решение получает 409; интерфейс позволяет обновить материалы, сохранив объяснение. Новые материалы меняют версию.
-- Production-клиент Qt принимает только HTTPS origin и запрещает переходы с учётными данными на другой origin. HTTP разрешён только для loopback в DEV/тестах. Windows защищает сохранённые токены очереди через DPAPI; на других ОС остаются файловые права, системное хранилище ключей ещё не подключено.
-- Nginx: доверенный адрес прокси, HTTPS/HSTS, защитные заголовки, журнал без query-параметров. CSP пока Report-Only. API/AI запускаются без root и лишних capabilities. DEV и production имеют разные подсети по умолчанию.
-- Миграции production вынесены в явный шаг; запуск с необновлённой схемой завершается ошибкой. Повторно используемые HTTP-клиенты Inference закрываются при остановке приложения.
-- Обновлены зависимости и добавлены проверки уязвимостей в CI. Исправлена загрузка IPA-словаря в Windows: явно используется UTF-8, а не системная кодировка.
+- Core issues short-lived access JWT (15 minutes by default) using RS256. Inference receives only public keys through a fixed JWKS URL. Admission, attempt and media-link keys are separated by purpose; the shared HMAC access JWT is no longer accepted.
+- Login sessions are stored in PostgreSQL. Refresh tokens are stored as hashes and rotated atomically; reuse revokes the family. Logout and password changes revoke access. Inference checks session validity with Core.
+- In the browser access JWT is held in memory, the refresh token is in an HttpOnly/SameSite cookie. Origin checks and login rate limits were added. Old tokens in localStorage are removed.
+- Teachers can access students, photos and credential exports only for assigned groups. The bootstrap teacher becomes an administrator; the administrator manages assignments on the groups page. Exam creation checks group access.
+- Observation and final integrity decisions use the version of the reviewed evidence. A stale decision receives 409; the interface allows refreshing evidence while preserving the explanation. New evidence changes the version.
+- The production Qt client accepts only an HTTPS origin and prevents credential-bearing redirects to a different origin. HTTP is allowed only for loopback in DEV/tests. Windows protects saved queue tokens using DPAPI; other operating systems rely on file permissions; a system key store is not yet integrated.
+- Nginx: trusted proxy address, HTTPS/HSTS, security headers, logging without query parameters. CSP is currently Report-Only. API/AI run without root and unnecessary capabilities. DEV and production use different default subnets.
+- Migrations for production are a separate explicit step; startup fails with an outdated schema. Reusable Inference HTTP clients are closed during application shutdown.
+- Dependencies were updated and vulnerability checks added to CI. Fixed loading of the IPA dictionary on Windows: UTF-8 is used explicitly instead of the system encoding.
 
-## Проверки и их границы
+## Checks and their limits
 
-- Core Release собирается; монитор собирается и проходит 54 теста. У монитора остаются предупреждения о размере bundle/CSS.
-- Inference: 56 unit-тестов проходят после обновления зависимостей. Они не измеряют точность на студентах.
-- После восстановления Docker повторно прошли 29 контрактов Core (один DEV-сценарий пропущен в production), 3 сценария групп, 6 сценариев безопасности и retention. Отдельно проверены отказ запуска production без миграции, явная миграция и реальное взаимодействие Inference с JWKS/отзывом сессии Core. Все 6 Qt-тестов прошли в Linux; 56 тестов Inference прошли в чистом Python 3.11 Linux. Две проверки локального HTTPS Nginx также успешны.
-- Аудит зафиксированных Python-зависимостей и production-зависимостей монитора не обнаружил известных уязвимостей на момент проверки; аудит сайта также чистый. В dev-зависимостях монитора остаются moderate advisory. Это не заменяет проверку образов и нативных библиотек.
-- Реальная фонемная модель проходит smoke-проверку всех тестовых последовательностей; неправильный порядок, тишина и шум отклоняются. Это синтетические примеры, не оценка точности на людях.
-- Реальные сертификаты домена, подпись Windows-инсталлятора, интеграция AI↔Core на действующем сервере не подтверждены. Полные Linux-образы AI и монитора успешно собраны; `pip check` в AI-образе не обнаружил конфликтов.
+- Core Release builds; the monitor builds and passes 54 tests. Bundle/CSS size warnings remain in the monitor.
+- Inference: 56 unit tests pass after dependency updates. They do not measure accuracy on students.
+- After restoring Docker 29 Core contracts passed again (one DEV scenario is skipped in production), 3 group scenarios, 6 security scenarios and retention. Separately verified refusal to start production without a migration, explicit migration and real integration of Inference with JWKS/session revocation in Core. All 6 Qt tests passed on Linux; 56 tests for Inference passed in a clean Python 3.11 Linux environment. Two local HTTPS Nginx checks also passed.
+- The audit of pinned Python dependencies and production dependencies in the monitor found no known vulnerabilities at the time of checking; the site audit was also clean. The monitor’s dev dependencies still have moderate advisories. This does not replace checking images and native libraries.
+- The real phoneme model passes a smoke test of all test sequences; incorrect order, silence and noise are rejected. These are synthetic examples, not a measurement of accuracy on people.
+- Real domain certificates, Windows installer signing, integration of AI↔Core on the live server have not been confirmed. Full Linux images of AI and the monitor built successfully; `pip check` in the AI image found no conflicts.
 
-Полный изолированный Docker-стек прошёл `tests/check_docker_stack.py`: production-миграция, загрузка пяти проверяемых артефактов моделей и фонемного распознавателя, UID 1654 для API/AI, HTTPS-монитор, Secure/HttpOnly/SameSite cookie, refresh через доверенный Nginx, настоящее AI-задание и отказ по отозванному JWT. Для запуска сначала собрать образы `examguardian-core-contract:local`, `examguardian-ai-hardening:local`, `examguardian-monitor-hardening:local`. Тест создаёт и удаляет только собственное окружение; действующие volumes не используются. Это smoke-проверка, не нагрузочное испытание и не измерение точности распознавания.
+The complete isolated Docker stack passed `tests/check_docker_stack.py`: production migration, loading five verified model artifacts and the phoneme recognizer, UID 1654 for API/AI, HTTPS monitor, Secure/HttpOnly/SameSite cookie, refresh through trusted Nginx, real AI challenge and rejection of a revoked JWT. To run, first build the images `examguardian-core-contract:local`, `examguardian-ai-hardening:local`, `examguardian-monitor-hardening:local`. The test creates and removes only its own environment; live volumes are not used. This is a smoke test, not a load test or a measurement of recognition accuracy.
 
-## Порядок обновления
+## Upgrade procedure
 
-1. Завершить активные экзамены. Сделать резервную копию PostgreSQL, evidence, credential keys и конфигурации; проверить восстановление. Обновление аннулирует старые JWT и refresh-токены и меняет ключи capability — нельзя проводить его посреди экзамена.
-2. Проверить `.env.production` по примеру: независимые случайные секреты длиной не менее 32 символов, настоящий HTTPS origin и сертификаты `fullchain.pem`/`privkey.pem`. `JWT__KEY` теперь корневой секрет capability, а не RSA access signing key.
-3. Задать уникальные `APP_NETWORK_SUBNET`/`PROXY_IP`, не пересекающиеся с LAN/VPN и другим окружением. Доверять только адресу Nginx. Не публиковать порты Core, AI и PostgreSQL наружу.
-4. Сохранить volume ключей: Core создаёт приватный RSA PEM внутри каталога credential keys. Не помещать его в git и не передавать AI. Потеря файла аннулирует выпущенные access JWT. Автоматическая ротация с перекрытием ключей ещё не реализована.
-5. Проверить права существующих bind mounts/volumes после перехода на пользователя UID 1654: API должен писать evidence/credential keys, AI — в свой outbox и `/home/app/.deepface`. Не выполнять рекурсивный chown произвольного каталога; определить реальные подключённые пути и корректировать только их. Старый root-кеш моделей при необходимости перенести в новый mount.
-6. Остановить обслуживающие запросы экземпляры перед миграцией. Выполнить `./scripts/Start-Environment.ps1 -Flavor production -Action migrate`, затем `-Action start`. Миграцию сначала проверить на восстановленной копии базы.
-7. Войти заново bootstrap-администратором и назначить группы остальным преподавателям. Проверить вход/выход, обновление токена, права разных преподавателей, загрузку доказательств и отказ от устаревшего решения. Обновить Qt-клиенты; старые Windows-токены очереди потребуют нового входа.
-8. При откате использовать согласованные резервные копии кода, базы и ключей. Простой возврат старого образа с новой схемой/секретами не считается проверенным откатом.
+1. Finish active exams. Back up PostgreSQL, evidence, credential keys and configuration; verify restoration. The upgrade invalidates old JWT and refresh tokens and changes capability keys — it must not be performed during an exam.
+2. Check `.env.production` against the example: independent random secrets of at least 32 characters, a real HTTPS origin and certificates `fullchain.pem`/`privkey.pem`. `JWT__KEY` is now the root capability secret, rather than an RSA access signing key.
+3. Set unique `APP_NETWORK_SUBNET`/`PROXY_IP` that do not overlap with LAN/VPN or another environment. Trust only the address of Nginx. Do not expose ports for Core, AI and PostgreSQL externally.
+4. Preserve the key volume: Core creates a private RSA PEM inside the directory for credential keys. Do not put it in git or share it with AI. Losing the file invalidates issued access JWT. Automatic rotation with overlapping keys is not yet implemented.
+5. Check permissions of existing bind mounts/volumes after switching to user UID 1654: API must write evidence/credential keys, AI must write into its own outbox and `/home/app/.deepface`. Do not recursively run chown on an arbitrary directory; identify the actual mounted paths and adjust only those. Move the old root model cache to the new mount if necessary.
+6. Stop request-serving instances before migration. Run `./scripts/Start-Environment.ps1 -Flavor production -Action migrate`, then `-Action start`. Test the migration on a restored database copy first.
+7. Sign in again as the bootstrap administrator and assign groups to other teachers. Check login/logout, token refresh, access for different teachers, evidence upload and rejection of stale decisions. Update Qt clients; old Windows queue tokens will require a new login.
+8. For rollback, use consistent backups of the code, database and keys. Simply reverting to an old image with the new schema/secrets is not a verified rollback.
 
-## Следующий этап архитектуры
+## Next architecture phase
 
-Сохранять модульный монолит Core: выделять границы авторизации, roster, review и evidence через интерфейсы, а не дробить сервер на микросервисы заранее. Хранилище доказательств следует отделить от файловой системы адаптером с вариантом S3; загрузки и фоновую обработку сделать идемпотентными. Inference пока имеет локальное состояние/SQLite и требует отдельного проекта очереди и владения заданиями перед горизонтальным масштабированием.
+Keep Core as a modular monolith: separate authorization, roster, review and evidence boundaries through interfaces instead of splitting the server into microservices prematurely. Evidence storage should be separated from the file system by an adapter with an S3 option; make uploads and background processing idempotent. Inference currently has local state/SQLite and needs a separate queue and job-ownership design before horizontal scaling.
 
-Для нескольких школ нужен настоящий SchoolId во всех связанных ресурсах, выдаче прав и запросах; текущие группы не являются изоляцией арендаторов. Нужны отдельный журнал административных действий, наблюдаемость очередей/ошибок, автоматическая ротация ключей, подпись инсталлятора и измерение precision/recall по размеченным реальным записям с согласием участников. Параллельное обновление cookie в разных вкладках пока может отозвать семейство refresh-токенов; перед массовым запуском требуется межвкладочная координация.
+Multiple schools require a real SchoolId in all related resources, grants and queries; current groups do not provide tenant isolation. A separate administrative audit log, queue/error observability, automatic key rotation, installer signing and measurement of precision/recall on labeled real recordings with participant consent are needed. Concurrent cookie refresh in different tabs can currently revoke the refresh token family; coordination between tabs is required before broad rollout.
 
-Студенту во время экзамена показывать только проблемы, требующие его действия и влияющие на сдачу. Наблюдения AI остаются у преподавателя; предмет, шум или процесс сами по себе не являются доказательством нарушения. Изменение порогов допустимо после измерений, а не для получения зелёного теста.
+During an exam, show students only issues that require action and affect submission. AI observations remain with the teacher; an object, noise or process alone is not proof of a violation. Thresholds should change after measurement, not to make a test pass.

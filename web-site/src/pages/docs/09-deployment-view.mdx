@@ -15,15 +15,15 @@ ExamGuardian runs in two isolated environments. Both environments run the same A
 
 ## 9.1 Environment topology
 
-<Mermaid source={"flowchart TB\n  Launcher[\"run.ps1\"] -->|\"Default\"| Dev[\"Development project\"]\n  Launcher -->|\"--production / Cyrillic alias\"| Prod[\"Production project\"]\n  Dev --> DevClient[\"Native DEV Qt client and override window\"]\n  Dev --> DevStack[\"API / AI / PostgreSQL / media / SQLite\"]\n  Dev --> Docs[\"Astro documentation :4321\"]\n  Prod --> ProdClient[\"Production Qt client \u2014 no override code\"]\n  Prod --> ProdStack[\"Production API / AI / PostgreSQL / media / SQLite\"]\n  Prod --> TLS[\"Nginx HTTPS origin\"]\n  DevStack -.->|\"Independent data, networks and keys\"| ProdStack"} />
+<Mermaid source={"flowchart TB\n  Launcher[\"run.ps1\"] -->|\"Default\"| Dev[\"Development project\"]\n  Launcher -->|\"--production / --prod\"| Prod[\"Production project\"]\n  Dev --> DevClient[\"Native DEV Qt client and override window\"]\n  Dev --> DevStack[\"API / AI / PostgreSQL / media / SQLite\"]\n  Dev --> Docs[\"Astro documentation :4321\"]\n  Prod --> ProdClient[\"Production Qt client \u2014 no override code\"]\n  Prod --> ProdStack[\"Production API / AI / PostgreSQL / media / SQLite\"]\n  Prod --> TLS[\"Nginx HTTPS origin\"]\n  DevStack -.->|\"Independent data, networks and keys\"| ProdStack"} />
 
 | Property | Development | Production |
 |---|---|---|
 | Default launch | `./run.ps1` | `./run.ps1 --production` |
-| Alternate production argument | — | `--продакшн` |
+| Alternate production argument | — | `--production` |
 | Compose project | `examguardian-dev` | `examguardian-production` |
 | API environment | `Development` | `Production` |
-| Application origin | `http://127.0.0.1:8081` | Configured institution HTTPS origin |
+| Application origin | `http://127.0.0.1:8081` | Configured institution an HTTPS origin |
 | Documentation | Astro service on the saved `DOCS_PORT` (initial selection starts at 4321) | No Astro development service |
 | Source updates | Source mounts and watch/reload | Images built from the selected checkout; no source reload |
 | Student client | DEV build with controlled overrides | Production build without override resources |
@@ -48,7 +48,7 @@ The launcher resolves repository paths, loads one explicit environment file, che
 | `compose.production.yml` | Production API environment and Nginx HTTPS listener/certificate mount |
 | `.env.dev.example` / `.env.production.example` | Separate configuration contracts; no real secrets |
 
-Development initialization generates missing random secrets and preserves an existing configuration. Production requires configured signing/API keys, bootstrap credentials where applicable, HTTPS origin and certificate paths. Invalid configuration stops with missing field names, not secret values.
+Development initialization generates missing random secrets and preserves an existing configuration. Production requires configured signing/API keys, bootstrap credentials where applicable, an HTTPS origin and certificate paths. Invalid configuration stops with missing field names, not secret values.
 
 A normal stop never uses `down --volumes`. Existing `proctoring_*` installations are migrated separately after a checkpoint and restore verification.
 

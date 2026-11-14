@@ -118,7 +118,7 @@ Replace every `REPLACE_…` value and the example hostname. Keep `SEED_DEMO_EXAM
 ./run.ps1 --production --status
 ```
 
-The Cyrillic alias `--продакшн` is also supported. Production uses `compose.base.yml` plus `compose.production.yml`, project `examguardian-production`, and its own volumes. Expected services are `db`, `api`, `ai_service`, and `nginx`.
+The alias `--prod` is also supported. Production uses `compose.base.yml` plus `compose.production.yml`, project `examguardian-production`, and its own volumes. Expected services are `db`, `api`, `ai_service`, and `nginx`.
 
 Open your HTTPS origin with `/login` for the examiner panel or `/landing/` for the student portal. Check these from a client machine, including certificate trust. Sign in with the initial credentials from `.env.production`. Bootstrap settings are not a password reset procedure for an existing database.
 

@@ -45,12 +45,12 @@ Build a release from source with `Client/build-release.ps1`. It checks packaged 
 
 Windows and Linux builds, headless QML startup and disk-queue tests pass. A native Windows Qt client also completes login, admission, autosave and submission against the isolated API. Linux X11 device behavior still needs a practical test; Wayland blocking is unsupported. Real cameras, microphones, interrupted capture, multi-student load, false-positive rates and attack resistance need practical validation before an institutional pilot is accepted.
 
-The detailed original audit and working verification record live in the repository as `PROJECT_ANALYSIS.md` and `WORK_PROGRESS.md`. Chapters 01–10 retain design context and must not be read as confirmation that every proposed capability is implemented.
+Security changes, verification results and upgrade requirements are documented in `SECURITY_HARDENING_2026-11-14.md` in the repository. Chapters 01–10 retain design context and must not be read as confirmation that every proposed capability is implemented.
 
 
 ## Development and production implementation checkpoint
 
-The isolated Compose environments and launcher are implemented. `./run.ps1` selects development; `--production` or the Cyrillic alias selects production, requiring an independent `.env.production` and actual HTTPS configuration. `--check`, `--status` and `--stop` operate on the selected project. Stopping development preserves its volumes and the existing legacy stack.
+The isolated Compose environments and launcher are implemented. `./run.ps1` selects development; `--production` or `--prod` selects production, requiring an independent `.env.production` and actual HTTPS configuration. `--check`, `--status` and `--stop` operate on the selected project. Stopping development preserves its volumes and the existing legacy stack.
 
 Development runs Core watch, AI reload, Angular live updates and an Astro container. Qt is native. On this workstation the application origin is `http://127.0.0.1:8081`; the documentation container uses port 4323 because 4321/4322 already host existing documentation servers. Newly initialized installations select an available docs port and store it in `.env.dev`.
 
