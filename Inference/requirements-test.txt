@@ -7,3 +7,6 @@ numpy==2.4.6
 opencv-python-headless==5.0.0.93
 
 cryptography==50.0.2
+# Continuous route contracts import the real VAD adapter.
+webrtcvad==2.0.10
+setuptools==80.9.0
