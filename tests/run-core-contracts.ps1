@@ -28,7 +28,10 @@ try {
     $ready=$false
     for ($i=0;$i -lt 45;$i++) { try { $response=Invoke-WebRequest http://127.0.0.1:55111/health/ready -UseBasicParsing -TimeoutSec 1; if ($response.StatusCode -eq 200) {$ready=$true;break} } catch {}; Start-Sleep -Seconds 1 }
     if (!$ready) {docker logs $api; throw 'Test API not ready.'}
-    docker run --rm --entrypoint ffmpeg --mount "type=bind,source=$media,target=/test" examguardian-core-contract:local -loglevel error -f lavfi -i color=c=gray:s=160x120:d=1 -an -c:v libx264 -pix_fmt yuv420p -y /test/contract.mp4; Check-Exit 'Test video generation'
+    # The fixture belongs to the runner; keep API/AI runtime users unchanged.
+    $fixtureUser=@()
+    if ($IsLinux -or $IsMacOS) { $fixtureUser=@('--user', "$(id -u):$(id -g)") }
+    docker run --rm @fixtureUser --entrypoint ffmpeg --mount "type=bind,source=$media,target=/test" examguardian-core-contract:local -loglevel error -f lavfi -i color=c=gray:s=160x120:d=1 -an -c:v libx264 -pix_fmt yuv420p -y /test/contract.mp4; Check-Exit 'Test video generation'
     $env:EXAMGUARDIAN_TEST_DEVELOPMENT=$devFlag
     $env:EXAMGUARDIAN_TEST_URL='http://127.0.0.1:55111'
     $env:EXAMGUARDIAN_TEST_KEY='examguardian-integration-test-signing-key-2026'
